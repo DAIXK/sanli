@@ -89,6 +89,13 @@ const isH5 = typeof window !== 'undefined' && typeof document !== 'undefined'
 let supportsUint32Index = true
 let marbleTemplate = null
 const marbleInstances = []
+const ringConfig = {
+  radius: 0.018,
+  perRing: 28,
+  depthStep: 0.0008,
+  layerGap: 0.0012,
+  offsetZ: 0
+}
 
 const getRefElement = () => {
   const target = canvasRef.value
@@ -270,6 +277,13 @@ const fitCameraToModel = (root) => {
   const center = boundingBox.getCenter(new THREE.Vector3())
 
   root.position.sub(center)
+
+  const ringRadiusCandidate = Math.max(size.x, size.y) / 2
+  if (ringRadiusCandidate > 0) {
+    ringConfig.radius = ringRadiusCandidate - 0.001
+  }
+  ringConfig.layerGap = Math.max(size.z * 0.8, 0.0008)
+  ringConfig.offsetZ = 0
 
   const maxDim = Math.max(size.x, size.y, size.z) || 1
   const fitHeightDistance = maxDim / (2 * Math.tan((camera.fov * Math.PI) / 360))
@@ -471,12 +485,13 @@ const loadMarbleTemplate = () => {
 }
 
 const getMarblePosition = (index) => {
-  const spacing = 0.05
-  const perRow = 4
-  const row = Math.floor(index / perRow)
-  const col = index % perRow
-  const offset = (perRow - 1) / 2
-  return new THREE.Vector3((col - offset) * spacing, -0.02, -0.12 - row * spacing)
+  const layer = Math.floor(index / ringConfig.perRing)
+  const slot = index % ringConfig.perRing
+  const angle = (slot / ringConfig.perRing) * Math.PI * 2
+  const baseRadius = Math.max(ringConfig.radius - 0.001, 0.001)
+  const radius = baseRadius + layer * ringConfig.depthStep
+  const z = ringConfig.offsetZ + layer * ringConfig.layerGap
+  return new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, z)
 }
 
 const handleAddMarble = async () => {
@@ -487,6 +502,7 @@ const handleAddMarble = async () => {
     const marble = template.clone(true)
     const position = getMarblePosition(marbleInstances.length)
     marble.position.copy(position)
+    marble.lookAt(0, 0, 0)
     scene.add(marble)
     marbleInstances.push(marble)
     marbleCount.value = marbleInstances.length
