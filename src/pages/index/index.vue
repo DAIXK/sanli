@@ -88,6 +88,10 @@ const instance = getCurrentInstance()
 const isH5 = typeof window !== 'undefined' && typeof document !== 'undefined'
 let supportsUint32Index = true
 let marbleTemplate = null
+const marbleBounds = {
+  diameter: 0.004,
+  thickness: 0.002
+}
 const marbleInstances = []
 const ringConfig = {
   radius: 0.018,
@@ -472,6 +476,9 @@ const loadMarbleTemplate = () => {
         const group = new THREE.Group()
         const clone = root.clone(true)
         const box = new THREE.Box3().setFromObject(clone)
+        const size = box.getSize(new THREE.Vector3())
+        marbleBounds.diameter = Math.max(size.x, size.y)
+        marbleBounds.thickness = size.z || marbleBounds.thickness
         const center = box.getCenter(new THREE.Vector3())
         clone.position.sub(center)
         group.add(clone)
@@ -485,12 +492,15 @@ const loadMarbleTemplate = () => {
 }
 
 const getMarblePosition = (index) => {
-  const layer = Math.floor(index / ringConfig.perRing)
-  const slot = index % ringConfig.perRing
-  const angle = (slot / ringConfig.perRing) * Math.PI * 2
-  const baseRadius = Math.max(ringConfig.radius - 0.001, 0.001)
-  const radius = baseRadius + layer * ringConfig.depthStep
-  const z = ringConfig.offsetZ + layer * ringConfig.layerGap
+  const circumference = Math.PI * 2 * ringConfig.radius
+  const diameter = marbleBounds.diameter || 0.004
+  const perRing = Math.max(6, Math.floor(circumference / (diameter * 1.05)))
+  ringConfig.perRing = perRing
+  const layer = Math.floor(index / perRing)
+  const slot = index % perRing
+  const angle = (slot / perRing) * Math.PI * 2
+  const radius = ringConfig.radius - Math.min(diameter / 2, 0.001)
+  const z = ringConfig.offsetZ + layer * (marbleBounds.thickness * 0.9)
   return new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, z)
 }
 
