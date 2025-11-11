@@ -1,0 +1,24 @@
+{
+  "name": "sanli-uniapp-model-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:h5": "uni dev:h5",
+    "dev:mp-weixin": "uni dev:mp-weixin",
+    "build:h5": "uni build:h5",
+    "build:mp-weixin": "uni build:mp-weixin"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "npm:@dcloudio/uni-app@vue3",
+    "@dcloudio/uni-h5": "npm:@dcloudio/uni-h5@vue3",
+    "@dcloudio/uni-mp-weixin": "npm:@dcloudio/uni-mp-weixin@vue3",
+    "three": "^0.162.0"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "3.4.19",
+    "@dcloudio/vite-plugin-uni": "npm:@dcloudio/vite-plugin-uni@vue3",
+    "sass": "^1.77.6",
+    "vite": "5.2.8"
+  }
+}
