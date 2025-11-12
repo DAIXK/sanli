@@ -77,7 +77,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 //可按 “radial/tangent/normal” 三种轴向做世界坐标旋转
 const MATERIAL_CONFIG = {
-  background: { glb: '/static/models/444.gltf', name: '手环模型' },
+  // background: { glb: '/static/models/444.gltf', name: '手环模型' },
+  background: { glb: '/static/models/弹力绳.gltf', name: '手环模型' },
   product: [
     {
       glb: '/static/models/321.gltf',
@@ -700,7 +701,7 @@ const initScene = async () => {
   }
 
   scene = new THREE.Scene()
-  scene.background = new THREE.Color('#f8f9fb')
+  scene.background = new THREE.Color('#ffffff')
 
   camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
   camera.position.set(0, 1, 4)
@@ -1012,7 +1013,7 @@ const handleAddMarble = async () => {
   display: flex;
   flex-direction: column;
   gap: 24rpx;
-  background: #f8f8f8;
+  background: #ffffff;
 }
 
 .toolbar {
@@ -1071,7 +1072,7 @@ const handleAddMarble = async () => {
   background: #ffffff;
   border-radius: 32rpx;
   padding: 24rpx;
-  box-shadow: 0 20rpx 40rpx rgba(15, 23, 42, 0.08);
+  box-shadow: none;
   flex: 1;
   min-height: 620rpx;
 }
@@ -1080,7 +1081,7 @@ const handleAddMarble = async () => {
   width: 100%;
   height: 560rpx;
   border-radius: 28rpx;
-  background: radial-gradient(circle at top, #f9f9f9, #ececec);
+  background: #ffffff;
 }
 
 .viewer-canvas canvas {
@@ -1094,7 +1095,7 @@ const handleAddMarble = async () => {
   position: absolute;
   inset: 24rpx;
   border-radius: 28rpx;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.95);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1106,7 +1107,7 @@ const handleAddMarble = async () => {
   background: #fff;
   border-radius: 32rpx;
   padding: 24rpx;
-  box-shadow: 0 12rpx 30rpx rgba(15, 23, 42, 0.08);
+  box-shadow: none;
 }
 
 .product-scroll {
@@ -1138,7 +1139,8 @@ const handleAddMarble = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #e5e5e5;
+  background: #ffffff;
+  border: 1rpx solid #e5e5e5;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
