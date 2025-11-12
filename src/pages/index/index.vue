@@ -1,13 +1,6 @@
 <template>
   <view class="page">
-    <view class="hero">
-      <view class="hero-text">
-        <text class="title">矿石 3D 预览</text>
-        <text class="subtitle">单指拖拽旋转 · 双指捏合缩放</text>
-      </view>
-      <view class="hero-tag">GLB</view>
-    </view>
-
+    
     <view class="viewer-card">
       <!-- #ifdef H5 -->
       <view class="viewer-canvas" ref="canvasRef"></view>
@@ -26,16 +19,13 @@
       </view>
     </view>
 
-    <view class="tips">
-      <text>提示：</text>
-      <text>模型文件位于 public 目录，可直接替换为其他 .glb 文件。</text>
-    </view>
+   
 
     <view class="marble-panel">
       <view class="marble-card">
         <view class="marble-info">
-          <text class="marble-title">321</text>
-          <text class="marble-desc">点击添加，仅允许围成一圈</text>
+          <text class="marble-title">{{ activeProductName }}</text>
+          <text class="marble-desc">点击添加 {{ activeProductName }}，仅允许围成一圈</text>
           <text class="marble-count">当前数量：{{ marbleCount }}</text>
         </view>
         <button
@@ -44,22 +34,71 @@
           :disabled="marbleLoading || !sceneReady || marbleCount >= marbleLimit"
           @tap="handleAddMarble"
         >
-          {{ marbleLoading ? '加载中...' : '添加321' }}
+          {{ marbleLoading ? '加载中...' : '添加' }}
         </button>
+      </view>
+      <view class="product-selector" v-if="productList.length">
+        <text class="product-selector-title">选择珠子</text>
+        <view class="product-selector-list">
+          <view
+            v-for="(item, index) in productList"
+            :key="item.glb || index"
+            class="product-selector-item"
+            :class="{ active: selectedProductIndex === index }"
+            @tap="selectProduct(index)"
+            >
+              <text class="product-selector-name">{{ item.name }}</text>
+              <text class="product-selector-weight">克重：{{ item.weight }}</text>
+            </view>
+        </view>
       </view>
     </view>
   </view>
 </template>
 
 <script setup>
-import { getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+//可按 “radial/tangent/normal” 三种轴向做世界坐标旋转
+const MATERIAL_CONFIG = {
+  background: { glb: '/static/models/444.gltf', name: '手环模型' },
+  product: [
+    {
+      glb: '/static/models/321.gltf',
+      name: '磨砂珠',
+      weight: '1',
+      rotation: (3 * Math.PI) / 2,
+      rotationAxis: 'radial'
+    },
+    {
+      glb: '/static/models/绿玛瑙1.gltf',
+      name: '绿玛瑙',
+      weight: '2',
+      rotation:  (3 * Math.PI) / 2,
+      rotationAxis: 'normal'
+    }
+  ]
+}
 
-const MODEL_URL = '/static/models/444.gltf'
-const MARBLE_URL = '/static/models/321.gltf'
+const productList = MATERIAL_CONFIG.product || []
+const selectedProductIndex = ref(0)
+const activeProduct = computed(() => productList[selectedProductIndex.value] || {})
+const activeProductName = computed(() => activeProduct.value?.name || '珠子')
+const activeProductGlb = computed(() => activeProduct.value?.glb || '')
+const DEFAULT_FACE_ROTATION = (3 * Math.PI) / 2
+const activeProductRotation = computed(() => {
+  const rotation = Number(activeProduct.value?.rotation)
+  return Number.isFinite(rotation) ? rotation : DEFAULT_FACE_ROTATION
+})
+const activeProductRotationAxis = computed(() => {
+  const axis = activeProduct.value?.rotationAxis
+  return ['radial', 'tangent', 'normal'].includes(axis) ? axis : 'radial'
+})
+
+const MODEL_URL = MATERIAL_CONFIG.background?.glb || ''
 const CANVAS_ID = 'modelCanvas'
 
 const canvasRef = ref(null)
@@ -68,7 +107,13 @@ const marbleLoading = ref(false)
 const marbleCount = ref(0)
 const sceneReady = ref(false)
 const marbleLimit = ref(Infinity)
-const MARBLE_FACE_ROTATION = (3 * Math.PI) / 2
+const selectProduct = (index) => {
+  if (!Array.isArray(productList) || !productList.length) return
+  if (!Number.isInteger(index)) return
+  const clamped = Math.min(Math.max(index, 0), productList.length - 1)
+  if (clamped === selectedProductIndex.value) return
+  selectedProductIndex.value = clamped
+}
 const raf =
   typeof requestAnimationFrame === 'function'
     ? requestAnimationFrame
@@ -88,7 +133,7 @@ let envTexture = null
 const instance = getCurrentInstance()
 const isH5 = typeof window !== 'undefined' && typeof document !== 'undefined'
 let supportsUint32Index = true
-let marbleTemplate = null
+const marbleTemplateCache = new Map()
 const marbleBounds = {
   diameter: 0.004,
   thickness: 0.002
@@ -663,7 +708,7 @@ const disposeScene = () => {
   pointerTeardown = null
   disposeArrowIndicator()
   selectedMarble = null
-  marbleTemplate = null
+  marbleTemplateCache.clear()
   marbleInstances.length = 0
   marbleCount.value = 0
   sceneReady.value = false
@@ -685,16 +730,21 @@ onBeforeUnmount(() => {
   disposeScene()
 })
 
-const loadMarbleTemplate = () => {
-  if (marbleTemplate) return Promise.resolve(marbleTemplate) // 已加载过则直接复用缓存
+const loadMarbleTemplate = (glbPath) => {
+  if (!glbPath) {
+    return Promise.reject(new Error('未提供有效的产品模型路径'))
+  }
+  if (marbleTemplateCache.has(glbPath)) {
+    return Promise.resolve(marbleTemplateCache.get(glbPath))
+  }
   return new Promise((resolve, reject) => {
     const loader = new GLTFLoader()
     loader.load(
-      MARBLE_URL,
+      glbPath,
       (gltf) => {
         const root = gltf.scene || gltf.scenes?.[0] // 取 glTF 根节点
         if (!root) {
-          reject(new Error('321模型缺少可渲染场景'))
+          reject(new Error('产品模型缺少可渲染场景'))
           return
         }
         const group = new THREE.Group() // 用于包裹弹珠并方便克隆
@@ -708,8 +758,8 @@ const loadMarbleTemplate = () => {
         const center = box.getCenter(new THREE.Vector3()) // 求出中心点
         clone.position.sub(center) // 平移到坐标原点，方便后续摆放
         group.add(clone)
-        marbleTemplate = group // 缓存模板
-        resolve(marbleTemplate)
+        marbleTemplateCache.set(glbPath, group) // 缓存模板
+        resolve(group)
       },
       undefined, 
       (error) => reject(error) // 加载失败时透出错误
@@ -748,7 +798,11 @@ const getMarblePosition = (index) => {
 
 
 // Keeps cloned beads consistently aligned with the bracelet's tangent.
-const orientMarble = (marble, position) => {
+const orientMarble = (
+  marble,
+  position,
+  { rotation = DEFAULT_FACE_ROTATION, axis = 'radial' } = {}
+) => {
   if (!marble || !position) return
   const normalVector = axisVectors[ringOrientation.normalAxis] || axisVectors.z
   marble.up.copy(normalVector)
@@ -757,9 +811,22 @@ const orientMarble = (marble, position) => {
   const radialAxis = position.clone()
   if (radialAxis.lengthSq() === 0) return
   radialAxis.normalize()
+  const tangentAxis = tempVector.clone().crossVectors(normalVector, radialAxis)
+  if (tangentAxis.lengthSq() > 0) {
+    tangentAxis.normalize()
+  }
   tempQuaternion.setFromAxisAngle(radialAxis, Math.PI / 2)
   marble.applyQuaternion(tempQuaternion)
-  marble.rotateOnWorldAxis(radialAxis, MARBLE_FACE_ROTATION)
+  if (!rotation) return
+  let worldAxis = radialAxis
+  if (axis === 'tangent' && tangentAxis.lengthSq() > 0) {
+    worldAxis = tangentAxis
+  } else if (axis === 'normal') {
+    worldAxis = normalVector.clone().normalize()
+  }
+  if (worldAxis.lengthSq() > 0) {
+    marble.rotateOnWorldAxis(worldAxis, rotation)
+  }
 }
 
 const handleAddMarble = async () => {
@@ -773,18 +840,32 @@ const handleAddMarble = async () => {
     }
     return
   }
+  const productGlb = activeProductGlb.value
+  if (!productGlb) {
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '未找到产品模型',
+        icon: 'none'
+      })
+    }
+    return
+  }
   marbleLoading.value = true
   try {
-    const template = await loadMarbleTemplate()
+    const template = await loadMarbleTemplate(productGlb)
     const marble = template.clone(true)
     marble.traverse((node) => {
       node.userData.marbleRoot = marble
+      node.userData.product = activeProduct.value
     })
     const position = getMarblePosition(marbleInstances.length)
     if (!position) {
       throw new Error('弹珠数量超出一圈容量')
     }
-    orientMarble(marble, position)
+    orientMarble(marble, position, {
+      rotation: activeProductRotation.value,
+      axis: activeProductRotationAxis.value
+    })
     scene.add(marble)
     marbleInstances.push(marble)
     marbleCount.value = marbleInstances.length
@@ -853,12 +934,12 @@ const handleAddMarble = async () => {
   padding: 24rpx;
   box-shadow: 0 24rpx 50rpx rgba(15, 23, 42, 0.08);
   flex: 1;
-  min-height: 600rpx;
+  min-height: 400rpx;
 }
 
 .viewer-canvas {
   width: 100%;
-  height: 520rpx;
+  height: 420rpx;
   border-radius: 32rpx;
   background: radial-gradient(circle at top, #f9fbff, #e5e9f5);
 }
@@ -897,7 +978,7 @@ const handleAddMarble = async () => {
 
 .marble-card {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 24rpx;
 }
@@ -906,6 +987,52 @@ const handleAddMarble = async () => {
   display: flex;
   flex-direction: column;
   gap: 8rpx;
+}
+
+.product-selector {
+  margin-top: 24rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.product-selector-title {
+  font-size: 26rpx;
+  color: #6b7280;
+}
+
+.product-selector-list {
+  display: flex;
+  gap: 16rpx;
+  flex-wrap: wrap;
+}
+
+.product-selector-item {
+  padding: 16rpx 20rpx;
+  border-radius: 24rpx;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  min-width: 180rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  font-size: 24rpx;
+  color: #4b5563;
+}
+
+.product-selector-item.active {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+}
+
+.product-selector-name {
+  font-weight: 600;
+}
+
+.product-selector-weight {
+  font-size: 22rpx;
+  color: #9ca3af;
 }
 
 .marble-title {
