@@ -249,10 +249,19 @@ const setRingOrientationBySize = (size) => {
   ringOrientation.planeAxes = [axisInfo[1].axis, axisInfo[2].axis]
 }
 const pointer = new THREE.Vector2()
+const LONG_PRESS_DURATION = 300
+let longPressTimer = null
 const raycaster = new THREE.Raycaster()
 let arrowIndicator = null
 let selectedMarble = null
 let pointerTeardown = null
+
+const cancelLongPressTimer = () => {
+  if (longPressTimer !== null) {
+    clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+}
 
 const getRefElement = () => {
   const target = canvasRef.value
@@ -621,6 +630,7 @@ const highlightMarble = (marble) => {
 }
 
 const clearSelection = () => {
+  cancelLongPressTimer()
   selectedMarble = null
   if (arrowIndicator) {
     arrowIndicator.visible = false
@@ -633,6 +643,49 @@ const resolveMarbleFromObject = (object) => {
     current = current.parent
   }
   return current || null
+}
+
+const removeMarble = (marble) => {
+  if (!marble || !scene) return false
+  const target = resolveMarbleFromObject(marble)
+  if (!target) return false
+  const index = marbleInstances.indexOf(target)
+  if (index === -1) return false
+  target.removeFromParent?.()
+  scene.remove(target)
+  marbleInstances.splice(index, 1)
+  marbleCount.value = marbleInstances.length
+  marbleLimit.value = Infinity
+  if (selectedMarble === target) {
+    clearSelection()
+  } else {
+    cancelLongPressTimer()
+  }
+  reflowMarbles()
+  return true
+}
+
+const handleLongPressDelete = () => {
+  if (!selectedMarble) return
+  const removed = removeMarble(selectedMarble)
+  if (!removed) return
+  if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+    uni.showToast({
+      title: '已删除该珠子',
+      icon: 'none'
+    })
+  } else {
+    console.info('Selected marble removed')
+  }
+}
+
+const startLongPressTimer = () => {
+  cancelLongPressTimer()
+  if (!selectedMarble) return
+  longPressTimer = setTimeout(() => {
+    longPressTimer = null
+    handleLongPressDelete()
+  }, LONG_PRESS_DURATION)
 }
 
 const selectMarbleByPointer = () => {
@@ -666,19 +719,29 @@ const setPointerFromEvent = (event) => {
 const bindPointerEvents = () => {
   if (!canvasElement || pointerTeardown) return
   const target = canvasElement
-  const handler = (event) => {
+  const handlePointerDown = (event) => {
     if (!sceneReady.value) return
     event.preventDefault?.()
+    cancelLongPressTimer()
     if (setPointerFromEvent(event)) {
       const hit = selectMarbleByPointer()
-      if (!hit) {
+      if (hit) {
+        startLongPressTimer()
+      } else {
         clearSelection()
       }
     }
   }
-  target.addEventListener('pointerdown', handler)
+  const handlePointerCancel = () => cancelLongPressTimer()
+  target.addEventListener('pointerdown', handlePointerDown)
+  target.addEventListener('pointerup', handlePointerCancel)
+  target.addEventListener('pointerleave', handlePointerCancel)
+  target.addEventListener('pointercancel', handlePointerCancel)
   pointerTeardown = () => {
-    target.removeEventListener('pointerdown', handler)
+    target.removeEventListener('pointerdown', handlePointerDown)
+    target.removeEventListener('pointerup', handlePointerCancel)
+    target.removeEventListener('pointerleave', handlePointerCancel)
+    target.removeEventListener('pointercancel', handlePointerCancel)
   }
 }
 
@@ -781,6 +844,7 @@ const disposeScene = () => {
   envTexture = null
   pmremGenerator?.dispose?.()
   pmremGenerator = null
+  cancelLongPressTimer()
   try {
     pointerTeardown?.()
   } catch (error) {
