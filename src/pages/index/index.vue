@@ -139,9 +139,17 @@ const marbleBounds = {
   thickness: 0.002
 }
 const productBounds = new Map()
+const spacingMetrics = {
+  totalDiameter: 0,
+  maxDiameter: 0,
+  count: 0
+}
 const updateGlobalBounds = ({ diameter, thickness }) => {
   if (Number.isFinite(diameter) && diameter > 0) {
     marbleBounds.diameter = Math.max(marbleBounds.diameter, diameter)
+    spacingMetrics.maxDiameter = Math.max(spacingMetrics.maxDiameter, diameter)
+    spacingMetrics.totalDiameter += diameter
+    spacingMetrics.count += 1
   }
   if (Number.isFinite(thickness) && thickness > 0) {
     marbleBounds.thickness = Math.max(marbleBounds.thickness, thickness)
@@ -598,6 +606,7 @@ const setPointerFromEvent = (event) => {
 
 const bindPointerEvents = () => {
   if (!canvasElement || pointerTeardown) return
+  const target = canvasElement
   const handler = (event) => {
     if (!sceneReady.value) return
     event.preventDefault?.()
@@ -608,9 +617,9 @@ const bindPointerEvents = () => {
       }
     }
   }
-  canvasElement.addEventListener('pointerdown', handler)
+  target.addEventListener('pointerdown', handler)
   pointerTeardown = () => {
-    canvasElement.removeEventListener('pointerdown', handler)
+    target.removeEventListener('pointerdown', handler)
   }
 }
 
@@ -713,12 +722,20 @@ const disposeScene = () => {
   envTexture = null
   pmremGenerator?.dispose?.()
   pmremGenerator = null
-  pointerTeardown?.()
-  pointerTeardown = null
+  try {
+    pointerTeardown?.()
+  } catch (error) {
+    console.warn('pointerTeardown failed', error)
+  } finally {
+    pointerTeardown = null
+  }
   disposeArrowIndicator()
   selectedMarble = null
   marbleTemplateCache.clear()
   productBounds.clear()
+  spacingMetrics.totalDiameter = 0
+  spacingMetrics.count = 0
+  spacingMetrics.maxDiameter = 0
   marbleInstances.length = 0
   marbleCount.value = 0
   sceneReady.value = false
@@ -784,13 +801,21 @@ const loadMarbleTemplate = (glbPath) => {
   })
 }
 
+const getSpacingDiameter = () => {
+  if (spacingMetrics.count <= 0) {
+    return marbleBounds.diameter
+  }
+  const avg = spacingMetrics.totalDiameter / spacingMetrics.count
+  return Math.min(Math.max(avg, 0), marbleBounds.diameter) || marbleBounds.diameter
+}
+
 const getMarblePosition = (index) => {
   // if (!ringConfig.radius || ringConfig.radius <= 0) {
   //   return null
   // }
-  const baseRadius = Math.max(ringConfig.radius, marbleBounds.diameter / 2) || ringConfig.radius
-  const diameter = marbleBounds.diameter || 0 // 获取弹珠在平面内的有效直径
-  const effectiveDiameter = diameter * 1.15 // 稍微放大，预留缝隙
+  const spacingDiameter = getSpacingDiameter()
+  const baseRadius = Math.max(ringConfig.radius, spacingDiameter / 2) || ringConfig.radius
+  const effectiveDiameter = spacingDiameter * 1.05 // 稍微放大，预留缝隙
   const halfChordRatio = Math.min(Math.max(effectiveDiameter / (2 * baseRadius), 0), 1)
   const angularWidth = halfChordRatio > 0 ? 2 * Math.asin(halfChordRatio) : 0
   const perRing = Math.max(6, angularWidth > 0 ? Math.floor((Math.PI * 2) / angularWidth) : ringConfig.perRing || 28)
@@ -801,7 +826,7 @@ const getMarblePosition = (index) => {
   }
   const angle = (index / perRing) * Math.PI * 2
   const radialOffset = (ringConfig.bandThickness || 0) / 2
-  const radius = Math.max(ringConfig.radius + radialOffset, diameter / 2)
+  const radius = Math.max(ringConfig.radius + radialOffset, spacingDiameter / 2)
   const [axisA, axisB] = ringOrientation.planeAxes
   const normalAxis = ringOrientation.normalAxis
   const position = new THREE.Vector3()
