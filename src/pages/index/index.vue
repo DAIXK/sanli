@@ -39,20 +39,7 @@
             <text class="marble-desc">点击添加，仅允许围成一圈</text>
             <text class="marble-count">当前数量：{{ marbleCount }}</text>
           </view>
-          <view class="marble-face-selector">
-            <text class="marble-face-label">显示面</text>
-            <view class="marble-face-options">
-              <view
-                v-for="(face, index) in marbleFaces"
-                :key="face.label"
-                class="marble-face-option"
-                :class="{ active: marbleFaceIndex === index }"
-                @tap="selectMarbleFace(index)"
-              >
-                {{ face.label }}
-              </view>
-            </view>
-          </view>
+        
         </view>
         <button
           class="marble-button"
@@ -84,11 +71,7 @@ const marbleLoading = ref(false)
 const marbleCount = ref(0)
 const sceneReady = ref(false)
 const marbleLimit = ref(Infinity)
-const marbleFaces = [
-  { label: '面一', angle: 0 },
-  { label: '面二', angle: (3 * Math.PI) / 2 },
-  { label: '面三', angle: (4 * Math.PI) / 3 }
-]
+
 const marbleFaceIndex = ref(0)
 console.log(' Math.PI ', Math.PI)
 const raf =
@@ -761,20 +744,8 @@ const getMarblePosition = (index) => {
   return position
 }
 
-const normalizeFaceIndex = (index) => {
-  const count = marbleFaces.length
-  if (!count) return 0
-  return ((index % count) + count) % count
-}
 
-const getFaceRotation = (index) => {
-  const normalized = normalizeFaceIndex(index)
-  return marbleFaces[normalized]?.angle || 0
-}
 
-const selectMarbleFace = (index) => {
-  marbleFaceIndex.value = normalizeFaceIndex(index)
-}
 
 // Keeps cloned beads consistently aligned with the bracelet's tangent.
 const orientMarble = (marble, position, faceIndex = 0) => {
@@ -788,7 +759,7 @@ const orientMarble = (marble, position, faceIndex = 0) => {
   radialAxis.normalize()
   tempQuaternion.setFromAxisAngle(radialAxis, Math.PI / 2)
   marble.applyQuaternion(tempQuaternion)
-  const faceRotation = getFaceRotation(faceIndex)
+  const faceRotation = (3 * Math.PI) / 2 //翻转90
   if (!faceRotation) return
   marble.rotateOnWorldAxis(radialAxis, faceRotation)
 }
@@ -815,7 +786,7 @@ const handleAddMarble = async () => {
     if (!position) {
       throw new Error('弹珠数量超出一圈容量')
     }
-    const faceIndex = normalizeFaceIndex(marbleFaceIndex.value)
+    const faceIndex =(3 * Math.PI) / 2  //翻转90
     orientMarble(marble, position, faceIndex)
     marble.userData.faceIndex = faceIndex
     scene.add(marble)
