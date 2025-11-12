@@ -197,7 +197,6 @@ const ringMetrics = {
   maxRadius: 0
 }
 const tempVector = new THREE.Vector3()
-const selectionTarget = new THREE.Vector3()
 const axisVectors = {
   x: new THREE.Vector3(1, 0, 0),
   y: new THREE.Vector3(0, 1, 0),
@@ -249,10 +248,19 @@ const setRingOrientationBySize = (size) => {
   ringOrientation.planeAxes = [axisInfo[1].axis, axisInfo[2].axis]
 }
 const pointer = new THREE.Vector2()
+const LONG_PRESS_DURATION = 650
+let longPressTimer = null
+let pendingMarble = null
 const raycaster = new THREE.Raycaster()
-let arrowIndicator = null
-let selectedMarble = null
 let pointerTeardown = null
+
+const cancelLongPressTimer = () => {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+  pendingMarble = null
+}
 
 const getRefElement = () => {
   const target = canvasRef.value
@@ -535,98 +543,6 @@ const updateRingMetrics = (root) => {
   ringConfig.bandThickness = Math.max(ringMetrics.maxRadius - ringMetrics.minRadius, 0)
 }
 
-const ensureArrowIndicator = () => {
-  if (arrowIndicator || !scene) return // 若之前已创建或场景未就绪则直接返回
-  const material = new THREE.MeshStandardMaterial({
-    color: 0xffb703, // 基础色：暖黄色，易于吸引注意力
-    emissive: 0xffa726, // 自发光颜色：略偏橙色，营造发光感
-    emissiveIntensity: 0.25, // 自发光强度，数值越大越亮
-    roughness: 0.35, // 粗糙度：0 表示镜面，1 表示完全漫反射
-    metalness: 0.1 // 金属度：0 漫反射材质，1 金属材质
-  }) // 使用暖色金属材质让箭头更加醒目
-
-  const group = new THREE.Group() // 用 group 汇总箭身与箭头，便于整体控制
-
-  const shaftGeometry = new THREE.CylinderGeometry(0.0015, 0.0015, 0.02, 16) // 细长圆柱作为箭身
-  shaftGeometry.rotateX(Math.PI / 2) // 旋转到 XY 平面内，方便从内圈指向外圈
-  const shaft = new THREE.Mesh(shaftGeometry, material) // 生成箭身网格
-  shaft.position.z = -0.01 // 稍微向后偏移，使箭头位置自然
-  group.add(shaft) // 箭身：细长圆柱
-
-  const headGeometry = new THREE.ConeGeometry(0.0035, 0.012, 24) // 圆锥作为箭头
-  headGeometry.rotateX(Math.PI / 2) // 与箭身保持同一朝向
-  const head = new THREE.Mesh(headGeometry, material) // 生成箭头网格
-  head.position.z = -0.022 // 让箭头位于箭身前方
-  group.add(head) // 箭头：圆锥
-
-  group.visible = false // 默认隐藏，选中时再显
-  arrowIndicator = group // 缓存箭头实例
-  scene.add(arrowIndicator) // 放入场景以便统一渲染
-}
-
-const disposeArrowIndicator = () => {
-  if (!arrowIndicator) return
-  arrowIndicator.traverse((child) => {
-    if (child.isMesh) {
-      child.geometry?.dispose?.()
-      if (Array.isArray(child.material)) {
-        child.material.forEach((mat) => mat?.dispose?.())
-      } else {
-        child.material?.dispose?.()
-      }
-    }
-  })
-  scene?.remove(arrowIndicator)
-  arrowIndicator = null
-}
-
-const highlightMarble = (marble) => {
-  if (!marble || !scene) return
-  ensureArrowIndicator()
-  if (!arrowIndicator) return
-  selectedMarble = marble
-  marble.getWorldPosition(selectionTarget)
-
-  const [axisA, axisB] = ringOrientation.planeAxes
-  const normalAxis = ringOrientation.normalAxis
-  const coordA = selectionTarget[axisA]
-  const coordB = selectionTarget[axisB]
-  const radialLength = Math.hypot(coordA, coordB)
-  if (!radialLength) return
-  const dirA = coordA / radialLength
-  const dirB = coordB / radialLength
-  const diameter = marbleBounds.diameter || 0.004
-  const radialCenter = Math.max(ringConfig.radius - (ringConfig.bandThickness || 0) / 2, 0)
-
-  const startPoint = new THREE.Vector3()
-  startPoint.addScaledVector(axisVectors[axisA], dirA * radialCenter)
-  startPoint.addScaledVector(axisVectors[axisB], dirB * radialCenter)
-  startPoint.addScaledVector(axisVectors[normalAxis], selectionTarget[normalAxis])
-
-  const endPoint = selectionTarget.clone()
-  const midPoint = startPoint.clone().lerp(endPoint, 0.5)
-  midPoint.addScaledVector(
-    axisVectors[normalAxis],
-    (ringConfig.bandThickness || marbleBounds.thickness || diameter) * 0.25
-  )
-
-  arrowIndicator.position.copy(midPoint)
-  const lookTarget = midPoint.clone()
-  lookTarget.addScaledVector(axisVectors[axisA], dirA)
-  lookTarget.addScaledVector(axisVectors[axisB], dirB)
-  arrowIndicator.lookAt(lookTarget)
-  const scaleFactor = Math.max(startPoint.distanceTo(endPoint), diameter * 0.8)
-  arrowIndicator.scale.setScalar(scaleFactor)
-  arrowIndicator.visible = true
-}
-
-const clearSelection = () => {
-  selectedMarble = null
-  if (arrowIndicator) {
-    arrowIndicator.visible = false
-  }
-}
-
 const resolveMarbleFromObject = (object) => {
   let current = object
   while (current && !marbleInstances.includes(current)) {
@@ -646,11 +562,41 @@ const removeMarble = (marble) => {
   marbleInstances.splice(index, 1)
   marbleCount.value = marbleInstances.length
   marbleLimit.value = Infinity
-  if (selectedMarble === target) {
-    clearSelection()
-  }
   reflowMarbles()
   return true
+}
+
+const removeMarbleWithFeedback = (marble) => {
+  const removed = removeMarble(marble)
+  if (!removed) return false
+  if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+    uni.showToast({
+      title: '已删除该珠子',
+      icon: 'none'
+    })
+  } else {
+    console.info('Selected marble removed')
+  }
+  return true
+}
+
+const startLongPressTimer = (marble) => {
+  cancelLongPressTimer()
+  pendingMarble = marble
+  if (!marble) return
+  if (!Number.isFinite(LONG_PRESS_DURATION) || LONG_PRESS_DURATION <= 0) {
+    removeMarbleWithFeedback(marble)
+    pendingMarble = null
+    return
+  }
+  longPressTimer = setTimeout(() => {
+    const target = pendingMarble
+    pendingMarble = null
+    longPressTimer = null
+    if (target) {
+      removeMarbleWithFeedback(target)
+    }
+  }, LONG_PRESS_DURATION)
 }
 
 const selectMarbleByPointer = () => {
@@ -661,11 +607,7 @@ const selectMarbleByPointer = () => {
   const hit = intersects.find(({ object }) => resolveMarbleFromObject(object))
   if (!hit) return null
   const marble = resolveMarbleFromObject(hit.object)
-  if (marble) {
-    highlightMarble(marble)
-    return marble
-  }
-  return null
+  return marble || null
 }
 
 const setPointerFromEvent = (event) => {
@@ -687,28 +629,29 @@ const bindPointerEvents = () => {
   const handlePointerDown = (event) => {
     if (!sceneReady.value) return
     event.preventDefault?.()
-    if (setPointerFromEvent(event)) {
-      const marble = selectMarbleByPointer()
-      if (marble) {
-        const removed = removeMarble(marble)
-        if (removed) {
-          if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
-            uni.showToast({
-              title: '已删除该珠子',
-              icon: 'none'
-            })
-          } else {
-            console.info('Selected marble removed')
-          }
-        }
-      } else {
-        clearSelection()
-      }
+    if (!setPointerFromEvent(event)) {
+      cancelLongPressTimer()
+      return
+    }
+    const marble = selectMarbleByPointer()
+    if (marble) {
+      startLongPressTimer(marble)
+    } else {
+      cancelLongPressTimer()
     }
   }
+  const handlePointerUp = () => cancelLongPressTimer()
+  const handlePointerLeave = () => cancelLongPressTimer()
+  const handlePointerCancel = () => cancelLongPressTimer()
   target.addEventListener('pointerdown', handlePointerDown)
+  target.addEventListener('pointerup', handlePointerUp)
+  target.addEventListener('pointerleave', handlePointerLeave)
+  target.addEventListener('pointercancel', handlePointerCancel)
   pointerTeardown = () => {
     target.removeEventListener('pointerdown', handlePointerDown)
+    target.removeEventListener('pointerup', handlePointerUp)
+    target.removeEventListener('pointerleave', handlePointerLeave)
+    target.removeEventListener('pointercancel', handlePointerCancel)
   }
 }
 
@@ -752,7 +695,6 @@ const initScene = async () => {
   adjustRendererSize()
   observeResize()
   bindPointerEvents()
-  ensureArrowIndicator()
   addLights()
 
   controls = new OrbitControls(camera, renderer.domElement)
@@ -811,6 +753,7 @@ const disposeScene = () => {
   envTexture = null
   pmremGenerator?.dispose?.()
   pmremGenerator = null
+  cancelLongPressTimer()
   try {
     pointerTeardown?.()
   } catch (error) {
@@ -818,8 +761,6 @@ const disposeScene = () => {
   } finally {
     pointerTeardown = null
   }
-  disposeArrowIndicator()
-  selectedMarble = null
   marbleTemplateCache.clear()
   productBounds.clear()
   marbleInstances.length = 0
