@@ -1,6 +1,34 @@
 <template>
   <view class="page">
-    
+    <view class="toolbar">
+      <view class="price-block">
+        <text class="price-text">¥ {{ formattedPrice }}</text>
+        <text class="price-subtitle">含税到手价</text>
+      </view>
+      <button class="ghost-button" @tap="handleGenerateVideo">生成视频</button>
+    </view>
+
+    <view class="selector-row">
+      <picker
+        class="selector"
+        mode="selector"
+        :value="selectedRingSizeIndex"
+        :range="ringSizeLabels"
+        @change="handleRingSizeChange"
+      >
+        <view class="selector-display">圈长 {{ ringSizeLabels[selectedRingSizeIndex] }}</view>
+      </picker>
+      <picker
+        class="selector"
+        mode="selector"
+        :value="selectedBeadSizeIndex"
+        :range="beadSizeLabels"
+        @change="handleBeadSizeChange"
+      >
+        <view class="selector-display">珠径 {{ beadSizeLabels[selectedBeadSizeIndex] }}</view>
+      </picker>
+    </view>
+
     <view class="viewer-card">
       <!-- #ifdef H5 -->
       <view class="viewer-canvas" ref="canvasRef"></view>
@@ -19,39 +47,24 @@
       </view>
     </view>
 
-   
-
-    <view class="marble-panel">
-      <view class="marble-card">
-        <view class="marble-info">
-          <text class="marble-title">{{ activeProductName }}</text>
-          <text class="marble-desc">点击添加 {{ activeProductName }}，仅允许围成一圈</text>
-          <text class="marble-count">当前数量：{{ marbleCount }}</text>
-        </view>
-        <button
-          class="marble-button"
-          :loading="marbleLoading"
-          :disabled="marbleLoading || !sceneReady || marbleCount >= marbleLimit"
-          @tap="handleAddMarble"
+    <view class="product-carousel" v-if="productList.length">
+      <scroll-view class="product-scroll" scroll-x="true" show-scrollbar="false">
+        <view
+          v-for="(item, index) in productList"
+          :key="item.glb || index"
+          class="product-item"
+          :class="{ active: selectedProductIndex === index }"
+          @tap="handleProductTap(index)"
         >
-          {{ marbleLoading ? '加载中...' : '添加' }}
-        </button>
-      </view>
-      <view class="product-selector" v-if="productList.length">
-        <text class="product-selector-title">选择珠子</text>
-        <view class="product-selector-list">
           <view
-            v-for="(item, index) in productList"
-            :key="item.glb || index"
-            class="product-selector-item"
-            :class="{ active: selectedProductIndex === index }"
-            @tap="selectProduct(index)"
-            >
-              <text class="product-selector-name">{{ item.name }}</text>
-              <text class="product-selector-weight">克重：{{ item.weight }}</text>
-            </view>
+            class="product-thumb"
+            :style="{ backgroundColor: item.color || '#e5e5e5' }"
+          >
+            <image v-if="item.preview" :src="item.preview" mode="aspectFill" />
+          </view>
+          <text class="product-name">{{ item.name }}</text>
         </view>
-      </view>
+      </scroll-view>
     </view>
   </view>
 </template>
@@ -71,14 +84,16 @@ const MATERIAL_CONFIG = {
       name: '磨砂珠',
       weight: '1',
       rotation: (3 * Math.PI) / 2,
-      rotationAxis: 'radial'
+      rotationAxis: 'radial',
+      color: '#d0b07a'
     },
     {
       glb: '/static/models/绿玛瑙1.gltf',
       name: '绿玛瑙',
       weight: '2',
-      rotation:  (3 * Math.PI) / 2,
-      rotationAxis: 'normal'
+      rotation: Math.PI / 2,
+      rotationAxis: 'normal',
+      color: '#1b7b4c'
     }
   ]
 }
@@ -86,7 +101,6 @@ const MATERIAL_CONFIG = {
 const productList = MATERIAL_CONFIG.product || []
 const selectedProductIndex = ref(0)
 const activeProduct = computed(() => productList[selectedProductIndex.value] || {})
-const activeProductName = computed(() => activeProduct.value?.name || '珠子')
 const activeProductGlb = computed(() => activeProduct.value?.glb || '')
 const DEFAULT_FACE_ROTATION = (3 * Math.PI) / 2
 const activeProductRotation = computed(() => {
@@ -111,8 +125,33 @@ const selectProduct = (index) => {
   if (!Array.isArray(productList) || !productList.length) return
   if (!Number.isInteger(index)) return
   const clamped = Math.min(Math.max(index, 0), productList.length - 1)
-  if (clamped === selectedProductIndex.value) return
   selectedProductIndex.value = clamped
+}
+const handleProductTap = async (index) => {
+  selectProduct(index)
+  await handleAddMarble()
+}
+const handleRingSizeChange = (event) => {
+  const idx = Number(event?.detail?.value)
+  if (Number.isNaN(idx)) return
+  selectedRingSizeIndex.value = idx
+  applyRingSize(idx)
+}
+const handleBeadSizeChange = (event) => {
+  const idx = Number(event?.detail?.value)
+  if (Number.isNaN(idx)) return
+  selectedBeadSizeIndex.value = idx
+  applyBeadSize(idx)
+}
+const handleGenerateVideo = () => {
+  if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+    uni.showToast({
+      title: '正在生成',
+      icon: 'none'
+    })
+  } else {
+    console.info('Generate video triggered')
+  }
 }
 const raf =
   typeof requestAnimationFrame === 'function'
@@ -171,6 +210,37 @@ const ringOrientation = {
   planeAxes: ['x', 'y'],
   normalAxis: 'z'
 }
+const price = ref(2288)
+const formattedPrice = computed(() => price.value.toLocaleString('zh-CN'))
+const ringSizeOptions = [
+  { label: '15cm', radius: 0.016 },
+  { label: '17cm', radius: 0.018 },
+  { label: '19cm', radius: 0.02 }
+]
+const beadSizeOptions = [
+  { label: '4mm', diameter: 0.004 },
+  { label: '5mm', diameter: 0.005 },
+  { label: '6mm', diameter: 0.006 }
+]
+const ringSizeLabels = ringSizeOptions.map((item) => item.label)
+const beadSizeLabels = beadSizeOptions.map((item) => item.label)
+const selectedRingSizeIndex = ref(1)
+const selectedBeadSizeIndex = ref(0)
+const applyRingSize = (index) => {
+  const option = ringSizeOptions[index]
+  if (!option) return
+  ringConfig.radius = option.radius
+  reflowMarbles()
+}
+const applyBeadSize = (index) => {
+  const option = beadSizeOptions[index]
+  if (!option) return
+  marbleBounds.diameter = option.diameter
+  marbleBounds.thickness = option.diameter
+  reflowMarbles()
+}
+marbleBounds.diameter = beadSizeOptions[selectedBeadSizeIndex.value]?.diameter || 0.004
+marbleBounds.thickness = marbleBounds.diameter
 const tempQuaternion = new THREE.Quaternion()
 const setRingOrientationBySize = (size) => {
   const axisInfo = [
@@ -900,7 +970,6 @@ const handleAddMarble = async () => {
       node.userData.product = activeProduct.value
       node.userData.bounds = bounds
     })
-    marble.userData.bounds = bounds
     if (bounds) {
       updateGlobalBounds(bounds)
     }
@@ -922,10 +991,10 @@ const handleAddMarble = async () => {
     marbleLimit.value = Infinity
     reflowMarbles()
   } catch (error) {
-    console.error('添加321失败', error)
+    console.error('添加珠子失败', error)
     if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
       uni.showToast({
-        title: '添加321失败',
+        title: '添加珠子失败',
         icon: 'none'
       })
     }
@@ -942,58 +1011,76 @@ const handleAddMarble = async () => {
   padding: 32rpx 32rpx 48rpx;
   display: flex;
   flex-direction: column;
-  gap: 32rpx;
+  gap: 24rpx;
+  background: #f8f8f8;
 }
 
-.hero {
+.toolbar {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 32rpx;
-  border-radius: 32rpx;
-  background: linear-gradient(135deg, #1f2933, #3b3f58);
-  color: #fff;
-  box-shadow: 0 20rpx 40rpx rgba(63, 72, 97, 0.35);
+  align-items: flex-start;
 }
 
-.hero-text {
+.price-block {
   display: flex;
   flex-direction: column;
+  gap: 6rpx;
 }
 
-.title {
-  font-size: 40rpx;
+.price-text {
+  font-size: 48rpx;
   font-weight: 600;
-  margin-bottom: 12rpx;
+  color: #111827;
 }
 
-.subtitle {
-  font-size: 26rpx;
-  opacity: 0.8;
-}
-
-.hero-tag {
-  padding: 12rpx 24rpx;
-  border-radius: 999rpx;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+.price-subtitle {
   font-size: 24rpx;
+  color: #9ca3af;
+}
+
+.ghost-button {
+  background: #fff;
+  border-radius: 999rpx;
+  border: 1rpx solid rgba(0, 0, 0, 0.08);
+  padding: 12rpx 28rpx;
+  font-size: 24rpx;
+  color: #111827;
+  box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.05);
+}
+
+.selector-row {
+  display: flex;
+  gap: 16rpx;
+}
+
+.selector {
+  flex: 1;
+}
+
+.selector-display {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 18rpx 24rpx;
+  border: 1rpx solid #e5e7eb;
+  font-size: 26rpx;
+  color: #1f2937;
 }
 
 .viewer-card {
   position: relative;
   background: #ffffff;
-  border-radius: 40rpx;
+  border-radius: 32rpx;
   padding: 24rpx;
-  box-shadow: 0 24rpx 50rpx rgba(15, 23, 42, 0.08);
+  box-shadow: 0 20rpx 40rpx rgba(15, 23, 42, 0.08);
   flex: 1;
-  min-height: 400rpx;
+  min-height: 620rpx;
 }
 
 .viewer-canvas {
   width: 100%;
-  height: 420rpx;
-  border-radius: 32rpx;
-  background: radial-gradient(circle at top, #f9fbff, #e5e9f5);
+  height: 560rpx;
+  border-radius: 28rpx;
+  background: radial-gradient(circle at top, #f9f9f9, #ececec);
 }
 
 .viewer-canvas canvas {
@@ -1006,8 +1093,8 @@ const handleAddMarble = async () => {
 .loading {
   position: absolute;
   inset: 24rpx;
-  border-radius: 32rpx;
-  background: rgba(255, 255, 255, 0.82);
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.9);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1015,103 +1102,53 @@ const handleAddMarble = async () => {
   color: #4b5563;
 }
 
-.tips {
-  font-size: 26rpx;
-  color: #4b5563;
-  line-height: 1.6;
-}
-
-.marble-panel {
-  background: #ffffff;
-  border-radius: 32rpx;
-  padding: 28rpx;
-  box-shadow: 0 16rpx 32rpx rgba(15, 23, 42, 0.08);
-}
-
-.marble-card {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24rpx;
-}
-
-.marble-info {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.product-selector {
-  margin-top: 24rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-}
-
-.product-selector-title {
-  font-size: 26rpx;
-  color: #6b7280;
-}
-
-.product-selector-list {
-  display: flex;
-  gap: 16rpx;
-  flex-wrap: wrap;
-}
-
-.product-selector-item {
-  padding: 16rpx 20rpx;
-  border-radius: 24rpx;
-  border: 1px solid #e5e7eb;
+.product-carousel {
   background: #fff;
-  min-width: 180rpx;
-  display: flex;
+  border-radius: 32rpx;
+  padding: 24rpx;
+  box-shadow: 0 12rpx 30rpx rgba(15, 23, 42, 0.08);
+}
+
+.product-scroll {
+  white-space: nowrap;
+}
+
+.product-item {
+  display: inline-flex;
   flex-direction: column;
-  gap: 6rpx;
+  align-items: center;
+  gap: 12rpx;
+  margin-right: 24rpx;
+}
+
+.product-item:last-child {
+  margin-right: 0;
+}
+
+.product-item.active .product-thumb {
+  transform: scale(1.05);
+  box-shadow: 0 12rpx 24rpx rgba(0, 0, 0, 0.15);
+}
+
+.product-thumb {
+  width: 110rpx;
+  height: 110rpx;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e5e5e5;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.product-thumb image {
+  width: 100%;
+  height: 100%;
+}
+
+.product-name {
   font-size: 24rpx;
   color: #4b5563;
-}
-
-.product-selector-item.active {
-  border-color: #2563eb;
-  background: rgba(37, 99, 235, 0.08);
-  color: #1d4ed8;
-}
-
-.product-selector-name {
-  font-weight: 600;
-}
-
-.product-selector-weight {
-  font-size: 22rpx;
-  color: #9ca3af;
-}
-
-.marble-title {
-  font-size: 32rpx;
-  font-weight: 600;
-}
-
-.marble-desc {
-  font-size: 26rpx;
-  color: #6b7280;
-}
-
-.marble-count {
-  font-size: 24rpx;
-  color: #9ca3af;
-}
-
-.marble-button {
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
-  color: #fff;
-  border: none;
-  border-radius: 999rpx;
-  padding: 18rpx 36rpx;
-  font-size: 28rpx;
-}
-
-.marble-button[disabled] {
-  opacity: 0.5;
 }
 </style>
