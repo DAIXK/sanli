@@ -99,8 +99,14 @@ const ringConfig = {
   perRing: 28,
   depthStep: 0.0008,
   layerGap: 0.0012,
-  offsetZ: 0
+  offsetZ: 0,
+  bandThickness: 0
 }
+const ringMetrics = {
+  minRadius: Infinity,
+  maxRadius: 0
+}
+const tempVector = new THREE.Vector3()
 
 const getRefElement = () => {
   const target = canvasRef.value
@@ -282,10 +288,16 @@ const fitCameraToModel = (root) => {
   const center = boundingBox.getCenter(new THREE.Vector3())
 
   root.position.sub(center)
+  updateRingMetrics(root)
 
-  const ringRadiusCandidate = Math.max(size.x, size.y) / 2
-  if (ringRadiusCandidate > 0) {
-    ringConfig.radius = ringRadiusCandidate - 0.001
+  if (!Number.isFinite(ringConfig.radius) || ringConfig.radius <= 0) {
+    const ringRadiusCandidate = Math.max(size.x, size.y) / 2
+    if (ringRadiusCandidate > 0) {
+      ringConfig.radius = ringRadiusCandidate
+    }
+  }
+  if (!Number.isFinite(ringConfig.bandThickness) || ringConfig.bandThickness <= 0) {
+    ringConfig.bandThickness = Math.max(size.z || 0, 0)
   }
   ringConfig.layerGap = Math.max(size.z * 0.8, 0.0008)
   ringConfig.offsetZ = 0
@@ -345,6 +357,32 @@ const convertIndexToUint16 = (geometry) => {
   array16.set(array)
   geometry.setIndex(new THREE.BufferAttribute(array16, 1))
   return true
+}
+
+const updateRingMetrics = (root) => {
+  if (!root) return
+  ringMetrics.minRadius = Infinity
+  ringMetrics.maxRadius = 0
+  root.updateMatrixWorld(true)
+  root.traverse((child) => {
+    if (!child.isMesh) return
+    const position = child.geometry?.attributes?.position
+    if (!position) return
+    for (let i = 0; i < position.count; i++) {
+      tempVector.fromBufferAttribute(position, i)
+      child.localToWorld(tempVector)
+      const radius = Math.hypot(tempVector.x, tempVector.y)
+      if (!Number.isFinite(radius)) continue
+      ringMetrics.minRadius = Math.min(ringMetrics.minRadius, radius)
+      ringMetrics.maxRadius = Math.max(ringMetrics.maxRadius, radius)
+    }
+  })
+  if (!Number.isFinite(ringMetrics.minRadius) || !Number.isFinite(ringMetrics.maxRadius)) {
+    return
+  }
+  const centerRadius = (ringMetrics.minRadius + ringMetrics.maxRadius) / 2
+  ringConfig.radius = centerRadius || ringConfig.radius
+  ringConfig.bandThickness = Math.max(ringMetrics.maxRadius - ringMetrics.minRadius, 0)
 }
 
 const initScene = async () => {
@@ -449,6 +487,9 @@ const disposeScene = () => {
   marbleCount.value = 0
   sceneReady.value = false
   marbleLimit.value = Infinity
+  ringMetrics.minRadius = Infinity
+  ringMetrics.maxRadius = 0
+  ringConfig.bandThickness = 0
   if (typeof resizeTeardown === 'function') {
     resizeTeardown()
     resizeTeardown = null
@@ -498,16 +539,17 @@ const getMarblePosition = (index) => {
   
   const diameter = marbleBounds.diameter  // 获取弹珠在平面内的最大直径
   const thickness = marbleBounds.thickness  // 获取弹珠在平面内的最大厚度
-  const perRing = Math.max(6, Math.floor(circumference / (diameter * 1.05))) // 按直径估算一圈可放多少颗，额外乘系数预留间距
+  const perRing = Math.max(6, Math.floor(circumference / (diameter * 1.01))) // 按直径估算一圈可放多少颗，额外乘系数预留间距
   ringConfig.perRing = perRing // 将计算结果回写到配置，便于其他逻辑参考
   marbleLimit.value = perRing // 同步给 UI 做上限提示
   if (index >= perRing) {
     return null // 超出容量直接返回空，提示无法添加
   }
   const angle = (index / perRing) * Math.PI * 2 // 将序号映射为当前圆上的角度
-  const radius = Math.max(ringConfig.radius , diameter / 2) // 让珠子中心位于手环中心线上
+  const radialOffset = (ringConfig.bandThickness || 0) / 2 // 手环厚度一半，用于向外偏移
+  const radius = Math.max(ringConfig.radius + radialOffset/6, diameter / 2) // 让珠子中心位于手环厚度中心线
   const z = ringConfig.offsetZ // 仅允许单层，固定高度
-  console.log("circumference: ",circumference," diameter: ",diameter," angle: ",angle.toFixed(2)," radius: ",radius.toFixed(4))
+  console.log("circumference: ",circumference," diameter: ",diameter," angle: ",angle.toFixed(2)," radius: ",radius.toFixed(4),"radialOffset",radialOffset)
   return new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, z) // 转回笛卡尔坐标
 }
 
