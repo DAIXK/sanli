@@ -487,7 +487,7 @@ const loadMarbleTemplate = () => {
         marbleTemplate = group // 缓存模板
         resolve(marbleTemplate)
       },
-      undefined,
+      undefined, 
       (error) => reject(error) // 加载失败时透出错误
     )
   })
@@ -495,7 +495,9 @@ const loadMarbleTemplate = () => {
 
 const getMarblePosition = (index) => {
   const circumference = Math.PI * 2 * ringConfig.radius // 根据手环半径计算当前圆周长度
-  const diameter = marbleBounds.diameter || 0.004 // 获取弹珠在平面内的最大直径
+  
+  const diameter = marbleBounds.diameter  // 获取弹珠在平面内的最大直径
+  const thickness = marbleBounds.thickness  // 获取弹珠在平面内的最大厚度
   const perRing = Math.max(6, Math.floor(circumference / (diameter * 1.05))) // 按直径估算一圈可放多少颗，额外乘系数预留间距
   ringConfig.perRing = perRing // 将计算结果回写到配置，便于其他逻辑参考
   marbleLimit.value = perRing // 同步给 UI 做上限提示
@@ -503,8 +505,9 @@ const getMarblePosition = (index) => {
     return null // 超出容量直接返回空，提示无法添加
   }
   const angle = (index / perRing) * Math.PI * 2 // 将序号映射为当前圆上的角度
-  const radius = Math.max(ringConfig.radius - diameter / 2, diameter / 2) // 让珠子中心位于手环中心线上
+  const radius = Math.max(ringConfig.radius , diameter / 2) // 让珠子中心位于手环中心线上
   const z = ringConfig.offsetZ // 仅允许单层，固定高度
+  console.log("circumference: ",circumference," diameter: ",diameter," angle: ",angle.toFixed(2)," radius: ",radius.toFixed(4))
   return new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, z) // 转回笛卡尔坐标
 }
 
