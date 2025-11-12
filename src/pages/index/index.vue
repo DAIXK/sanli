@@ -107,6 +107,12 @@ const ringMetrics = {
   maxRadius: 0
 }
 const tempVector = new THREE.Vector3()
+const selectionTarget = new THREE.Vector3()
+const pointer = new THREE.Vector2()
+const raycaster = new THREE.Raycaster()
+let arrowIndicator = null
+let selectedMarble = null
+let pointerTeardown = null
 
 const getRefElement = () => {
   const target = canvasRef.value
@@ -385,6 +391,113 @@ const updateRingMetrics = (root) => {
   ringConfig.bandThickness = Math.max(ringMetrics.maxRadius - ringMetrics.minRadius, 0)
 }
 
+const ensureArrowIndicator = () => {
+  if (arrowIndicator || !scene) return // 若之前已创建或场景未就绪则直接返回
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffb703, // 基础色：暖黄色，易于吸引注意力
+    emissive: 0xffa726, // 自发光颜色：略偏橙色，营造发光感
+    emissiveIntensity: 0.25, // 自发光强度，数值越大越亮
+    roughness: 0.35, // 粗糙度：0 表示镜面，1 表示完全漫反射
+    metalness: 0.1 // 金属度：0 漫反射材质，1 金属材质
+  }) // 使用暖色金属材质让箭头更加醒目
+
+  const group = new THREE.Group() // 用 group 汇总箭身与箭头，便于整体控制
+
+  const shaftGeometry = new THREE.CylinderGeometry(0.0015, 0.0015, 0.02, 16) // 细长圆柱作为箭身
+  shaftGeometry.rotateX(Math.PI / 2) // 旋转到 XY 平面内，方便从内圈指向外圈
+  const shaft = new THREE.Mesh(shaftGeometry, material) // 生成箭身网格
+  shaft.position.z = -0.01 // 稍微向后偏移，使箭头位置自然
+  group.add(shaft) // 箭身：细长圆柱
+
+  const headGeometry = new THREE.ConeGeometry(0.0035, 0.012, 24) // 圆锥作为箭头
+  headGeometry.rotateX(Math.PI / 2) // 与箭身保持同一朝向
+  const head = new THREE.Mesh(headGeometry, material) // 生成箭头网格
+  head.position.z = -0.022 // 让箭头位于箭身前方
+  group.add(head) // 箭头：圆锥
+
+  group.visible = false // 默认隐藏，选中时再显
+  arrowIndicator = group // 缓存箭头实例
+  scene.add(arrowIndicator) // 放入场景以便统一渲染
+}
+
+const disposeArrowIndicator = () => {
+  if (!arrowIndicator) return
+  arrowIndicator.traverse((child) => {
+    if (child.isMesh) {
+      child.geometry?.dispose?.()
+      if (Array.isArray(child.material)) {
+        child.material.forEach((mat) => mat?.dispose?.())
+      } else {
+        child.material?.dispose?.()
+      }
+    }
+  })
+  scene?.remove(arrowIndicator)
+  arrowIndicator = null
+}
+
+const highlightMarble = (marble) => {
+  if (!marble || !scene) return
+  ensureArrowIndicator() // 确保箭头已创建
+  if (!arrowIndicator) return
+  selectedMarble = marble // 记录当前被选弹珠
+  marble.getWorldPosition(selectionTarget) // 获取世界坐标，作为箭头目标点
+  const offset = Math.max(ringConfig.bandThickness || 0.01, marbleBounds.thickness || 0.01) + 0.01
+  arrowIndicator.position.copy(selectionTarget) // 基于弹珠位置摆放箭头
+  arrowIndicator.position.z += offset // 稍微抬高一点，避免与模型重合
+  arrowIndicator.lookAt(selectionTarget) // 指向弹珠中心
+  arrowIndicator.visible = true
+}
+
+const resolveMarbleFromObject = (object) => {
+  let current = object
+  while (current && !marbleInstances.includes(current)) {
+    current = current.parent
+  }
+  return current || null
+}
+
+const selectMarbleByPointer = () => {
+  if (!camera || marbleInstances.length === 0) return
+  raycaster.setFromCamera(pointer, camera)
+  const intersects = raycaster.intersectObjects(marbleInstances, true)
+  if (!intersects.length) return
+  const hit = intersects.find(({ object }) => resolveMarbleFromObject(object))
+  if (!hit) return
+  const marble = resolveMarbleFromObject(hit.object)
+  if (marble) {
+    highlightMarble(marble)
+  }
+}
+
+const setPointerFromEvent = (event) => {
+  if (!canvasElement || !canvasElement.getBoundingClientRect) return false
+  const rect = canvasElement.getBoundingClientRect()
+  const source =
+    event.touches?.[0] || event.changedTouches?.[0] || event.originalEvent?.touches?.[0] || event
+  const clientX = source?.clientX
+  const clientY = source?.clientY
+  if (typeof clientX !== 'number' || typeof clientY !== 'number') return false
+  pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1
+  pointer.y = -(((clientY - rect.top) / rect.height) * 2 - 1)
+  return true
+}
+
+const bindPointerEvents = () => {
+  if (!canvasElement || pointerTeardown) return
+  const handler = (event) => {
+    if (!sceneReady.value) return
+    event.preventDefault?.()
+    if (setPointerFromEvent(event)) {
+      selectMarbleByPointer()
+    }
+  }
+  canvasElement.addEventListener('pointerdown', handler)
+  pointerTeardown = () => {
+    canvasElement.removeEventListener('pointerdown', handler)
+  }
+}
+
 const initScene = async () => {
   canvasElement = await resolveCanvasElement()
   if (!canvasElement) {
@@ -424,6 +537,8 @@ const initScene = async () => {
 
   adjustRendererSize()
   observeResize()
+  bindPointerEvents()
+  ensureArrowIndicator()
   addLights()
 
   controls = new OrbitControls(camera, renderer.domElement)
@@ -482,6 +597,10 @@ const disposeScene = () => {
   envTexture = null
   pmremGenerator?.dispose?.()
   pmremGenerator = null
+  pointerTeardown?.()
+  pointerTeardown = null
+  disposeArrowIndicator()
+  selectedMarble = null
   marbleTemplate = null
   marbleInstances.length = 0
   marbleCount.value = 0
@@ -568,6 +687,9 @@ const handleAddMarble = async () => {
   try {
     const template = await loadMarbleTemplate()
     const marble = template.clone(true)
+    marble.traverse((node) => {
+      node.userData.marbleRoot = marble
+    })
     const position = getMarblePosition(marbleInstances.length)
     if (!position) {
       throw new Error('弹珠数量超出一圈容量')
