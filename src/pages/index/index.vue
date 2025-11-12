@@ -717,7 +717,7 @@ const loadMarbleTemplate = () => {
 const getMarblePosition = (index) => {
   const circumference = Math.PI * 2 * ringConfig.radius // 根据手环半径计算当前圆周长度
   const diameter = marbleBounds.diameter // 获取弹珠在平面内的最大直径
-  const perRing = Math.max(6, Math.floor(circumference / (diameter * 1.001))) // 预留一点空隙
+  const perRing = Math.max(6, Math.floor(circumference / (diameter * 1))) // 预留一点空隙
   ringConfig.perRing = perRing
   marbleLimit.value = perRing
   if (index >= perRing) {
@@ -759,6 +759,10 @@ const handleAddMarble = async () => {
     }
     marble.position.copy(position)
     marble.lookAt(0, 0, 0)
+    const radialAxis = position.clone().normalize()
+    if (radialAxis.lengthSq() > 0) {
+      marble.rotateOnWorldAxis(radialAxis, Math.PI / 2) // 沿径向再翻转 90°，用另一组平面穿环
+    }
     scene.add(marble)
     marbleInstances.push(marble)
     marbleCount.value = marbleInstances.length
