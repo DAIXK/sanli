@@ -991,7 +991,7 @@ const handleAddMarble = async () => {
     console.error('添加珠子失败', error)
     if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
       uni.showToast({
-        title: '添加珠子失败',
+        title: '无法继续添加珠子',
         icon: 'none'
       })
     }
@@ -1069,8 +1069,14 @@ const handleAddMarble = async () => {
   border-radius: 32rpx;
   padding: 24rpx;
   box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
   flex: 1;
   min-height: 620rpx;
+
 }
 
 .viewer-canvas {
@@ -1085,6 +1091,7 @@ const handleAddMarble = async () => {
   height: 100%;
   display: block;
   border-radius: inherit;
+ 
 }
 
 .loading {
