@@ -35,13 +35,13 @@
       <view class="marble-card">
         <view class="marble-info">
           <text class="marble-title">321</text>
-          <text class="marble-desc">点击添加，可堆叠多个</text>
+          <text class="marble-desc">点击添加，仅允许围成一圈</text>
           <text class="marble-count">当前数量：{{ marbleCount }}</text>
         </view>
         <button
           class="marble-button"
           :loading="marbleLoading"
-          :disabled="marbleLoading || !sceneReady"
+          :disabled="marbleLoading || !sceneReady || marbleCount >= marbleLimit"
           @tap="handleAddMarble"
         >
           {{ marbleLoading ? '加载中...' : '添加321' }}
@@ -67,6 +67,7 @@ const loadingText = ref('加载模型中...')
 const marbleLoading = ref(false)
 const marbleCount = ref(0)
 const sceneReady = ref(false)
+const marbleLimit = ref(Infinity)
 
 const raf =
   typeof requestAnimationFrame === 'function'
@@ -447,6 +448,7 @@ const disposeScene = () => {
   marbleInstances.length = 0
   marbleCount.value = 0
   sceneReady.value = false
+  marbleLimit.value = Infinity
   if (typeof resizeTeardown === 'function') {
     resizeTeardown()
     resizeTeardown = null
@@ -462,55 +464,69 @@ onBeforeUnmount(() => {
 })
 
 const loadMarbleTemplate = () => {
-  if (marbleTemplate) return Promise.resolve(marbleTemplate)
+  if (marbleTemplate) return Promise.resolve(marbleTemplate) // 已加载过则直接复用缓存
   return new Promise((resolve, reject) => {
     const loader = new GLTFLoader()
     loader.load(
       MARBLE_URL,
       (gltf) => {
-        const root = gltf.scene || gltf.scenes?.[0]
+        const root = gltf.scene || gltf.scenes?.[0] // 取 glTF 根节点
         if (!root) {
           reject(new Error('321模型缺少可渲染场景'))
           return
         }
-        const group = new THREE.Group()
-        const clone = root.clone(true)
-        const box = new THREE.Box3().setFromObject(clone)
-        const size = box.getSize(new THREE.Vector3())
-        marbleBounds.diameter = Math.max(size.x, size.y)
-        marbleBounds.thickness = size.z || marbleBounds.thickness
-        const center = box.getCenter(new THREE.Vector3())
-        clone.position.sub(center)
+        const group = new THREE.Group() // 用于包裹弹珠并方便克隆
+        const clone = root.clone(true) // 深拷贝，避免直接修改原始场景
+        const box = new THREE.Box3().setFromObject(clone) // 计算包围盒
+        const size = box.getSize(new THREE.Vector3()) // 获取三轴尺寸
+        marbleBounds.diameter = Math.max(size.x, size.y) // 平面方向取最大值作为直径
+        marbleBounds.thickness = size.z || marbleBounds.thickness // Z 轴视为厚度
+        const center = box.getCenter(new THREE.Vector3()) // 求出中心点
+        clone.position.sub(center) // 平移到坐标原点，方便后续摆放
         group.add(clone)
-        marbleTemplate = group
+        marbleTemplate = group // 缓存模板
         resolve(marbleTemplate)
       },
       undefined,
-      (error) => reject(error)
+      (error) => reject(error) // 加载失败时透出错误
     )
   })
 }
 
 const getMarblePosition = (index) => {
-  const circumference = Math.PI * 2 * ringConfig.radius
-  const diameter = marbleBounds.diameter || 0.004
-  const perRing = Math.max(6, Math.floor(circumference / (diameter * 1.05)))
-  ringConfig.perRing = perRing
-  const layer = Math.floor(index / perRing)
-  const slot = index % perRing
-  const angle = (slot / perRing) * Math.PI * 2
-  const radius = ringConfig.radius - Math.min(diameter / 2, 0.001)
-  const z = ringConfig.offsetZ + layer * (marbleBounds.thickness * 0.9)
-  return new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, z)
+  const circumference = Math.PI * 2 * ringConfig.radius // 根据手环半径计算当前圆周长度
+  const diameter = marbleBounds.diameter || 0.004 // 获取弹珠在平面内的最大直径
+  const perRing = Math.max(6, Math.floor(circumference / (diameter * 1.05))) // 按直径估算一圈可放多少颗，额外乘系数预留间距
+  ringConfig.perRing = perRing // 将计算结果回写到配置，便于其他逻辑参考
+  marbleLimit.value = perRing // 同步给 UI 做上限提示
+  if (index >= perRing) {
+    return null // 超出容量直接返回空，提示无法添加
+  }
+  const angle = (index / perRing) * Math.PI * 2 // 将序号映射为当前圆上的角度
+  const radius = Math.max(ringConfig.radius - diameter / 2, diameter / 2) // 让珠子中心位于手环中心线上
+  const z = ringConfig.offsetZ // 仅允许单层，固定高度
+  return new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, z) // 转回笛卡尔坐标
 }
 
 const handleAddMarble = async () => {
   if (!scene || marbleLoading.value) return
+  if (marbleCount.value >= marbleLimit.value) {
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '已满一圈，无法继续添加',
+        icon: 'none'
+      })
+    }
+    return
+  }
   marbleLoading.value = true
   try {
     const template = await loadMarbleTemplate()
     const marble = template.clone(true)
     const position = getMarblePosition(marbleInstances.length)
+    if (!position) {
+      throw new Error('弹珠数量超出一圈容量')
+    }
     marble.position.copy(position)
     marble.lookAt(0, 0, 0)
     scene.add(marble)
