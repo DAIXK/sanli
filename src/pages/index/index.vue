@@ -760,8 +760,9 @@ const handleAddMarble = async () => {
     marble.position.copy(position)
     marble.lookAt(0, 0, 0)
     const radialAxis = position.clone().normalize()
-    if (radialAxis.lengthSq() > 0) {
-      marble.rotateOnWorldAxis(radialAxis, Math.PI / 2) // 沿径向再翻转 90°，用另一组平面穿环
+    if (radialAxis.lengthSq() > 1e-8) {
+      const rotateQuat = new THREE.Quaternion().setFromAxisAngle(radialAxis, Math.PI / 2)
+      marble.applyQuaternion(rotateQuat) // 沿径向再翻转 90°，用另一组平面穿环
     }
     scene.add(marble)
     marbleInstances.push(marble)
