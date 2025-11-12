@@ -449,6 +449,13 @@ const highlightMarble = (marble) => {
   arrowIndicator.visible = true
 }
 
+const clearSelection = () => {
+  selectedMarble = null
+  if (arrowIndicator) {
+    arrowIndicator.visible = false
+  }
+}
+
 const resolveMarbleFromObject = (object) => {
   let current = object
   while (current && !marbleInstances.includes(current)) {
@@ -458,16 +465,18 @@ const resolveMarbleFromObject = (object) => {
 }
 
 const selectMarbleByPointer = () => {
-  if (!camera || marbleInstances.length === 0) return
+  if (!camera || marbleInstances.length === 0) return false
   raycaster.setFromCamera(pointer, camera)
   const intersects = raycaster.intersectObjects(marbleInstances, true)
-  if (!intersects.length) return
+  if (!intersects.length) return false
   const hit = intersects.find(({ object }) => resolveMarbleFromObject(object))
-  if (!hit) return
+  if (!hit) return false
   const marble = resolveMarbleFromObject(hit.object)
   if (marble) {
     highlightMarble(marble)
+    return true
   }
+  return false
 }
 
 const setPointerFromEvent = (event) => {
@@ -489,7 +498,10 @@ const bindPointerEvents = () => {
     if (!sceneReady.value) return
     event.preventDefault?.()
     if (setPointerFromEvent(event)) {
-      selectMarbleByPointer()
+      const hit = selectMarbleByPointer()
+      if (!hit) {
+        clearSelection()
+      }
     }
   }
   canvasElement.addEventListener('pointerdown', handler)
@@ -658,7 +670,7 @@ const getMarblePosition = (index) => {
   
   const diameter = marbleBounds.diameter  // 获取弹珠在平面内的最大直径
   const thickness = marbleBounds.thickness  // 获取弹珠在平面内的最大厚度
-  const perRing = Math.max(6, Math.floor(circumference / (diameter * 1.01))) // 按直径估算一圈可放多少颗，额外乘系数预留间距
+  const perRing = Math.max(6, Math.floor(circumference / (diameter * 1.001))) // 按直径估算一圈可放多少颗，额外乘系数预留间距
   ringConfig.perRing = perRing // 将计算结果回写到配置，便于其他逻辑参考
   marbleLimit.value = perRing // 同步给 UI 做上限提示
   if (index >= perRing) {
