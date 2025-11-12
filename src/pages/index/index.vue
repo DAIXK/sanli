@@ -701,8 +701,10 @@ const loadMarbleTemplate = () => {
         const clone = root.clone(true) // 深拷贝，避免直接修改原始场景
         const box = new THREE.Box3().setFromObject(clone) // 计算包围盒
         const size = box.getSize(new THREE.Vector3()) // 获取三轴尺寸
-        marbleBounds.diameter = Math.max(size.x, size.y) // 平面方向取最大值作为直径
-        marbleBounds.thickness = size.z || marbleBounds.thickness // Z 轴视为厚度
+        const maxSpan = Math.min(size.x, size.y, size.z)
+        const minSpan = Math.min(size.x, size.y, size.z)
+        marbleBounds.diameter = maxSpan || marbleBounds.diameter // 取最大跨距适配任意朝向
+        marbleBounds.thickness = minSpan || marbleBounds.thickness // 最小值视为厚度
         const center = box.getCenter(new THREE.Vector3()) // 求出中心点
         clone.position.sub(center) // 平移到坐标原点，方便后续摆放
         group.add(clone)
@@ -721,7 +723,7 @@ const getMarblePosition = (index) => {
   // }
   const circumference = Math.PI * 2 * ringConfig.radius // 根据手环半径计算当前圆周长度
   const diameter = marbleBounds.diameter // 获取弹珠在平面内的最大直径
-  const perRing = Math.max(6, Math.floor(circumference / (diameter * 1))) // 预留一点空隙
+  const perRing = Math.max(6, Math.floor(circumference / (diameter * 1.001))) // 预留一点空隙
   ringConfig.perRing = perRing
   marbleLimit.value = perRing
   if (index >= perRing) {
