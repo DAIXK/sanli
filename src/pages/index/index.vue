@@ -138,6 +138,15 @@ const marbleBounds = {
   diameter: 0.004,
   thickness: 0.002
 }
+const productBounds = new Map()
+const updateGlobalBounds = ({ diameter, thickness }) => {
+  if (Number.isFinite(diameter) && diameter > 0) {
+    marbleBounds.diameter = Math.max(marbleBounds.diameter, diameter)
+  }
+  if (Number.isFinite(thickness) && thickness > 0) {
+    marbleBounds.thickness = Math.max(marbleBounds.thickness, thickness)
+  }
+}
 const marbleInstances = []
 const ringConfig = {
   radius: 0.018,
@@ -709,6 +718,7 @@ const disposeScene = () => {
   disposeArrowIndicator()
   selectedMarble = null
   marbleTemplateCache.clear()
+  productBounds.clear()
   marbleInstances.length = 0
   marbleCount.value = 0
   sceneReady.value = false
@@ -735,7 +745,10 @@ const loadMarbleTemplate = (glbPath) => {
     return Promise.reject(new Error('未提供有效的产品模型路径'))
   }
   if (marbleTemplateCache.has(glbPath)) {
-    return Promise.resolve(marbleTemplateCache.get(glbPath))
+    const cached = marbleTemplateCache.get(glbPath)
+    const bounds = productBounds.get(glbPath)
+    if (bounds) updateGlobalBounds(bounds)
+    return Promise.resolve(cached)
   }
   return new Promise((resolve, reject) => {
     const loader = new GLTFLoader()
@@ -753,8 +766,12 @@ const loadMarbleTemplate = (glbPath) => {
         const size = box.getSize(new THREE.Vector3()) // 获取三轴尺寸
         const minSpan = Math.min(size.x, size.y, size.z)
         const maxSpan = Math.max(size.x, size.y, size.z)
-        marbleBounds.diameter = minSpan || marbleBounds.diameter // 取最小跨距作为沿周向的有效直径
-        marbleBounds.thickness = maxSpan || marbleBounds.thickness // 余下最大跨距当作厚度冗余
+        const bounds = {
+          diameter: minSpan || marbleBounds.diameter,
+          thickness: maxSpan || marbleBounds.thickness
+        }
+        productBounds.set(glbPath, bounds)
+        updateGlobalBounds(bounds)
         const center = box.getCenter(new THREE.Vector3()) // 求出中心点
         clone.position.sub(center) // 平移到坐标原点，方便后续摆放
         group.add(clone)
