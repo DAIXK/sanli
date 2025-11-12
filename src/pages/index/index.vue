@@ -33,10 +33,26 @@
 
     <view class="marble-panel">
       <view class="marble-card">
-        <view class="marble-info">
-          <text class="marble-title">321</text>
-          <text class="marble-desc">点击添加，仅允许围成一圈</text>
-          <text class="marble-count">当前数量：{{ marbleCount }}</text>
+        <view class="marble-details">
+          <view class="marble-info">
+            <text class="marble-title">321</text>
+            <text class="marble-desc">点击添加，仅允许围成一圈</text>
+            <text class="marble-count">当前数量：{{ marbleCount }}</text>
+          </view>
+          <view class="marble-face-selector">
+            <text class="marble-face-label">显示面</text>
+            <view class="marble-face-options">
+              <view
+                v-for="(face, index) in marbleFaces"
+                :key="face.label"
+                class="marble-face-option"
+                :class="{ active: marbleFaceIndex === index }"
+                @tap="selectMarbleFace(index)"
+              >
+                {{ face.label }}
+              </view>
+            </view>
+          </view>
         </view>
         <button
           class="marble-button"
@@ -68,7 +84,13 @@ const marbleLoading = ref(false)
 const marbleCount = ref(0)
 const sceneReady = ref(false)
 const marbleLimit = ref(Infinity)
-
+const marbleFaces = [
+  { label: '面一', angle: 0 },
+  { label: '面二', angle: (3 * Math.PI) / 2 },
+  { label: '面三', angle: (4 * Math.PI) / 3 }
+]
+const marbleFaceIndex = ref(0)
+console.log(' Math.PI ', Math.PI)
 const raf =
   typeof requestAnimationFrame === 'function'
     ? requestAnimationFrame
@@ -117,6 +139,7 @@ const ringOrientation = {
   planeAxes: ['x', 'y'],
   normalAxis: 'z'
 }
+const tempQuaternion = new THREE.Quaternion()
 const setRingOrientationBySize = (size) => {
   const axisInfo = [
     { axis: 'x', length: size.x },
@@ -715,6 +738,9 @@ const loadMarbleTemplate = () => {
 }
 
 const getMarblePosition = (index) => {
+  // if (!ringConfig.radius || ringConfig.radius <= 0) {
+  //   return null
+  // }
   const circumference = Math.PI * 2 * ringConfig.radius // 根据手环半径计算当前圆周长度
   const diameter = marbleBounds.diameter // 获取弹珠在平面内的最大直径
   const perRing = Math.max(6, Math.floor(circumference / (diameter * 1))) // 预留一点空隙
@@ -733,6 +759,38 @@ const getMarblePosition = (index) => {
   position.addScaledVector(axisVectors[axisB], Math.sin(angle) * radius)
   position.addScaledVector(axisVectors[normalAxis], ringConfig.offsetZ)
   return position
+}
+
+const normalizeFaceIndex = (index) => {
+  const count = marbleFaces.length
+  if (!count) return 0
+  return ((index % count) + count) % count
+}
+
+const getFaceRotation = (index) => {
+  const normalized = normalizeFaceIndex(index)
+  return marbleFaces[normalized]?.angle || 0
+}
+
+const selectMarbleFace = (index) => {
+  marbleFaceIndex.value = normalizeFaceIndex(index)
+}
+
+// Keeps cloned beads consistently aligned with the bracelet's tangent.
+const orientMarble = (marble, position, faceIndex = 0) => {
+  if (!marble || !position) return
+  const normalVector = axisVectors[ringOrientation.normalAxis] || axisVectors.z
+  marble.up.copy(normalVector)
+  marble.position.copy(position)
+  marble.lookAt(0, 0, 0)
+  const radialAxis = position.clone()
+  if (radialAxis.lengthSq() === 0) return
+  radialAxis.normalize()
+  tempQuaternion.setFromAxisAngle(radialAxis, Math.PI / 2)
+  marble.applyQuaternion(tempQuaternion)
+  const faceRotation = getFaceRotation(faceIndex)
+  if (!faceRotation) return
+  marble.rotateOnWorldAxis(radialAxis, faceRotation)
 }
 
 const handleAddMarble = async () => {
@@ -757,13 +815,9 @@ const handleAddMarble = async () => {
     if (!position) {
       throw new Error('弹珠数量超出一圈容量')
     }
-    marble.position.copy(position)
-    marble.lookAt(0, 0, 0)
-    const radialAxis = position.clone().normalize()
-    if (radialAxis.lengthSq() > 1e-8) {
-      const rotateQuat = new THREE.Quaternion().setFromAxisAngle(radialAxis, Math.PI / 2)
-      marble.applyQuaternion(rotateQuat) // 沿径向再翻转 90°，用另一组平面穿环
-    }
+    const faceIndex = normalizeFaceIndex(marbleFaceIndex.value)
+    orientMarble(marble, position, faceIndex)
+    marble.userData.faceIndex = faceIndex
     scene.add(marble)
     marbleInstances.push(marble)
     marbleCount.value = marbleInstances.length
@@ -876,15 +930,54 @@ const handleAddMarble = async () => {
 
 .marble-card {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 24rpx;
+}
+
+.marble-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  flex: 1;
 }
 
 .marble-info {
   display: flex;
   flex-direction: column;
   gap: 8rpx;
+}
+
+.marble-face-selector {
+  margin: 12rpx 0;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  flex-wrap: wrap;
+}
+
+.marble-face-label {
+  font-size: 24rpx;
+  color: #6b7280;
+}
+
+.marble-face-options {
+  display: flex;
+  gap: 12rpx;
+  flex-wrap: wrap;
+}
+
+.marble-face-option {
+  padding: 10rpx 24rpx;
+  border-radius: 999rpx;
+  background: #f3f4f6;
+  color: #4b5563;
+  font-size: 24rpx;
+}
+
+.marble-face-option.active {
+  background: #1f2933;
+  color: #fff;
 }
 
 .marble-title {
