@@ -56,11 +56,8 @@
           :class="{ active: selectedProductIndex === index }"
           @tap="handleProductTap(index)"
         >
-          <view
-            class="product-thumb"
-            :style="{ backgroundColor: item.color || '#e5e5e5' }"
-          >
-            <image v-if="item.preview" :src="item.preview" mode="aspectFill" />
+          <view class="product-thumb">
+            <image v-if="item.png" :src="item.png" mode="aspectFill" />
           </view>
           <text class="product-name">{{ item.name }}</text>
         </view>
@@ -77,8 +74,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 //可按 “radial/tangent/normal” 三种轴向做世界坐标旋转
 const MATERIAL_CONFIG = {
-  // background: { glb: '/static/models/444.gltf', name: '手环模型' },
-  background: { glb: '/static/models/弹力绳.gltf', name: '手环模型' },
+  background: { glb: '/static/models/弹力绳.glb', name: '手环模型' },
   product: [
     {
       glb: '/static/models/321.gltf',
@@ -86,7 +82,7 @@ const MATERIAL_CONFIG = {
       weight: '1',
       rotation: (3 * Math.PI) / 2,
       rotationAxis: 'radial',
-      color: '#d0b07a'
+      png: '/static/models/磨砂珠.png'
     },
     {
       glb: '/static/models/绿玛瑙1.gltf',
@@ -94,7 +90,7 @@ const MATERIAL_CONFIG = {
       weight: '2',
       rotation: Math.PI / 2,
       rotationAxis: 'normal',
-      color: '#1b7b4c'
+      png: '/static/models/绿玛瑙.png'
     }
   ]
 }
@@ -1128,7 +1124,6 @@ const handleAddMarble = async () => {
 
 .product-item.active .product-thumb {
   transform: scale(1.05);
-  box-shadow: 0 12rpx 24rpx rgba(0, 0, 0, 0.15);
 }
 
 .product-thumb {
@@ -1139,9 +1134,7 @@ const handleAddMarble = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #ffffff;
-  border: 1rpx solid #e5e5e5;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease;
 }
 
 .product-thumb image {
