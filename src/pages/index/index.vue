@@ -139,17 +139,12 @@ const marbleBounds = {
   thickness: 0
 }
 const productBounds = new Map()
-let layoutNeedsUpdate = false
-const layoutSignature = {
-  diameter: null,
-  perRing: null
-}
 const updateGlobalBounds = ({ diameter, thickness }) => {
   if (Number.isFinite(diameter) && diameter > 0) {
-    marbleBounds.diameter = Math.max(marbleBounds.diameter, diameter)
+    marbleBounds.diameter = diameter
   }
   if (Number.isFinite(thickness) && thickness > 0) {
-    marbleBounds.thickness = Math.max(marbleBounds.thickness, thickness)
+    marbleBounds.thickness = thickness
   }
 }
 const marbleInstances = []
@@ -730,9 +725,6 @@ const disposeScene = () => {
   selectedMarble = null
   marbleTemplateCache.clear()
   productBounds.clear()
-  layoutNeedsUpdate = false
-  layoutSignature.diameter = null
-  layoutSignature.perRing = null
   marbleInstances.length = 0
   marbleCount.value = 0
   sceneReady.value = false
@@ -785,7 +777,6 @@ const loadMarbleTemplate = (glbPath) => {
           thickness: maxSpan || marbleBounds.thickness
         }
         productBounds.set(glbPath, bounds)
-        updateGlobalBounds(bounds)
         const center = box.getCenter(new THREE.Vector3()) // 求出中心点
         clone.position.sub(center) // 平移到坐标原点，方便后续摆放
         group.add(clone)
@@ -798,19 +789,11 @@ const loadMarbleTemplate = (glbPath) => {
   })
 }
 
-const markLayoutDirty = (perRing, diameter) => {
-  if (layoutSignature.perRing !== perRing || layoutSignature.diameter !== diameter) {
-    layoutSignature.perRing = perRing
-    layoutSignature.diameter = diameter
-    layoutNeedsUpdate = true
-  }
-}
-
 const reflowMarbles = () => {
-  if (!layoutNeedsUpdate || !scene) return
-  layoutNeedsUpdate = false
+  if (!scene || !marbleInstances.length) return
   marbleInstances.forEach((marble, index) => {
-    const position = getMarblePosition(index)
+    const diameter = marble.userData.bounds?.diameter || marbleBounds.diameter || 0.004
+    const position = computeMarblePosition(index, diameter)
     if (!position) return
     const rotationConfig =
       marble.userData.rotationConfig || { rotation: DEFAULT_FACE_ROTATION, axis: 'radial' }
@@ -818,32 +801,42 @@ const reflowMarbles = () => {
   })
 }
 
-const getMarblePosition = (index) => {
-  // if (!ringConfig.radius || ringConfig.radius <= 0) {
-  //   return null
-  // }
-  const spacingDiameter = marbleBounds.diameter || 0
-  const baseRadius = Math.max(ringConfig.radius, spacingDiameter / 2) || ringConfig.radius
-  const effectiveDiameter = spacingDiameter * 1.05 // 稍微放大，预留缝隙
-  const halfChordRatio = Math.min(Math.max(effectiveDiameter / (2 * baseRadius), 0), 1)
-  const angularWidth = halfChordRatio > 0 ? 2 * Math.asin(halfChordRatio) : 0
-  const perRing = Math.max(6, angularWidth > 0 ? Math.floor((Math.PI * 2) / angularWidth) : ringConfig.perRing || 28)
-  ringConfig.perRing = perRing
-  markLayoutDirty(perRing, spacingDiameter)
-  marbleLimit.value = perRing
-  if (index >= perRing) {
-    return null
+const arcWidthFromDiameter = (diameter, radius) => {
+  const safeDiameter = Math.max(diameter || 0.004, 0.0005)
+  const effectiveDiameter = safeDiameter * 1.02
+  const ratio = Math.min(Math.max(effectiveDiameter / (2 * radius), 0), 1)
+  return ratio > 0 ? 2 * Math.asin(ratio) : 0
+}
+
+const computeMarblePosition = (index, diameterOverride) => {
+  const radius = Math.max(ringConfig.radius, 0.001)
+  const maxArc = Math.PI * 2
+  let accumulatedArc = 0
+  for (let i = 0; i <= index; i++) {
+    const isTarget = i === index
+    const targetMarble = marbleInstances[i]
+    const diameter = isTarget
+      ? diameterOverride
+      : targetMarble?.userData?.bounds?.diameter ?? marbleBounds.diameter ?? 0.004
+    const arcWidth = arcWidthFromDiameter(diameter, radius)
+    if (isTarget) {
+      if (accumulatedArc + arcWidth > maxArc) {
+        return null
+      }
+      const angle = accumulatedArc + arcWidth / 2
+      const [axisA, axisB] = ringOrientation.planeAxes
+      const normalAxis = ringOrientation.normalAxis
+      const radialOffset = (ringConfig.bandThickness || 0) / 2
+      const effectiveRadius = Math.max(ringConfig.radius + radialOffset, diameter / 2 || 0.002)
+      const position = new THREE.Vector3()
+      position.addScaledVector(axisVectors[axisA], Math.cos(angle) * effectiveRadius)
+      position.addScaledVector(axisVectors[axisB], Math.sin(angle) * effectiveRadius)
+      position.addScaledVector(axisVectors[normalAxis], ringConfig.offsetZ)
+      return position
+    }
+    accumulatedArc += arcWidth
   }
-  const angle = (index / perRing) * Math.PI * 2
-  const radialOffset = (ringConfig.bandThickness || 0) / 2
-  const radius = Math.max(ringConfig.radius + radialOffset, spacingDiameter / 2)
-  const [axisA, axisB] = ringOrientation.planeAxes
-  const normalAxis = ringOrientation.normalAxis
-  const position = new THREE.Vector3()
-  position.addScaledVector(axisVectors[axisA], Math.cos(angle) * radius)
-  position.addScaledVector(axisVectors[axisB], Math.sin(angle) * radius)
-  position.addScaledVector(axisVectors[normalAxis], ringConfig.offsetZ)
-  return position
+  return null
 }
 
 
@@ -883,15 +876,6 @@ const orientMarble = (
 
 const handleAddMarble = async () => {
   if (!scene || marbleLoading.value) return
-  if (marbleCount.value >= marbleLimit.value) {
-    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
-      uni.showToast({
-        title: '已满一圈，无法继续添加',
-        icon: 'none'
-      })
-    }
-    return
-  }
   const productGlb = activeProductGlb.value
   if (!productGlb) {
     if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
@@ -905,13 +889,25 @@ const handleAddMarble = async () => {
   marbleLoading.value = true
   try {
     const template = await loadMarbleTemplate(productGlb)
+    const bounds =
+      productBounds.get(productGlb) || {
+        diameter: marbleBounds.diameter || 0.004,
+        thickness: marbleBounds.thickness || 0.002
+      }
     const marble = template.clone(true)
     marble.traverse((node) => {
       node.userData.marbleRoot = marble
       node.userData.product = activeProduct.value
+      node.userData.bounds = bounds
     })
-    const position = getMarblePosition(marbleInstances.length)
+    marble.userData.bounds = bounds
+    if (bounds) {
+      updateGlobalBounds(bounds)
+    }
+    const diameterForPlacement = bounds?.diameter || marbleBounds.diameter || 0.004
+    const position = computeMarblePosition(marbleInstances.length, diameterForPlacement)
     if (!position) {
+      marbleLimit.value = marbleCount.value
       throw new Error('弹珠数量超出一圈容量')
     }
     const rotationConfig = {
@@ -923,6 +919,7 @@ const handleAddMarble = async () => {
     scene.add(marble)
     marbleInstances.push(marble)
     marbleCount.value = marbleInstances.length
+    marbleLimit.value = Infinity
     reflowMarbles()
   } catch (error) {
     console.error('添加321失败', error)
