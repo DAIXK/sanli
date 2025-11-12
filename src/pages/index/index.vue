@@ -135,21 +135,18 @@ const isH5 = typeof window !== 'undefined' && typeof document !== 'undefined'
 let supportsUint32Index = true
 const marbleTemplateCache = new Map()
 const marbleBounds = {
-  diameter: 0.004,
-  thickness: 0.002
+  diameter: 0,
+  thickness: 0
 }
 const productBounds = new Map()
-const spacingMetrics = {
-  totalDiameter: 0,
-  maxDiameter: 0,
-  count: 0
+let layoutNeedsUpdate = false
+const layoutSignature = {
+  diameter: null,
+  perRing: null
 }
 const updateGlobalBounds = ({ diameter, thickness }) => {
   if (Number.isFinite(diameter) && diameter > 0) {
     marbleBounds.diameter = Math.max(marbleBounds.diameter, diameter)
-    spacingMetrics.maxDiameter = Math.max(spacingMetrics.maxDiameter, diameter)
-    spacingMetrics.totalDiameter += diameter
-    spacingMetrics.count += 1
   }
   if (Number.isFinite(thickness) && thickness > 0) {
     marbleBounds.thickness = Math.max(marbleBounds.thickness, thickness)
@@ -733,9 +730,9 @@ const disposeScene = () => {
   selectedMarble = null
   marbleTemplateCache.clear()
   productBounds.clear()
-  spacingMetrics.totalDiameter = 0
-  spacingMetrics.count = 0
-  spacingMetrics.maxDiameter = 0
+  layoutNeedsUpdate = false
+  layoutSignature.diameter = null
+  layoutSignature.perRing = null
   marbleInstances.length = 0
   marbleCount.value = 0
   sceneReady.value = false
@@ -801,25 +798,38 @@ const loadMarbleTemplate = (glbPath) => {
   })
 }
 
-const getSpacingDiameter = () => {
-  if (spacingMetrics.count <= 0) {
-    return marbleBounds.diameter
+const markLayoutDirty = (perRing, diameter) => {
+  if (layoutSignature.perRing !== perRing || layoutSignature.diameter !== diameter) {
+    layoutSignature.perRing = perRing
+    layoutSignature.diameter = diameter
+    layoutNeedsUpdate = true
   }
-  const avg = spacingMetrics.totalDiameter / spacingMetrics.count
-  return Math.min(Math.max(avg, 0), marbleBounds.diameter) || marbleBounds.diameter
+}
+
+const reflowMarbles = () => {
+  if (!layoutNeedsUpdate || !scene) return
+  layoutNeedsUpdate = false
+  marbleInstances.forEach((marble, index) => {
+    const position = getMarblePosition(index)
+    if (!position) return
+    const rotationConfig =
+      marble.userData.rotationConfig || { rotation: DEFAULT_FACE_ROTATION, axis: 'radial' }
+    orientMarble(marble, position, rotationConfig)
+  })
 }
 
 const getMarblePosition = (index) => {
   // if (!ringConfig.radius || ringConfig.radius <= 0) {
   //   return null
   // }
-  const spacingDiameter = getSpacingDiameter()
+  const spacingDiameter = marbleBounds.diameter || 0
   const baseRadius = Math.max(ringConfig.radius, spacingDiameter / 2) || ringConfig.radius
   const effectiveDiameter = spacingDiameter * 1.05 // 稍微放大，预留缝隙
   const halfChordRatio = Math.min(Math.max(effectiveDiameter / (2 * baseRadius), 0), 1)
   const angularWidth = halfChordRatio > 0 ? 2 * Math.asin(halfChordRatio) : 0
   const perRing = Math.max(6, angularWidth > 0 ? Math.floor((Math.PI * 2) / angularWidth) : ringConfig.perRing || 28)
   ringConfig.perRing = perRing
+  markLayoutDirty(perRing, spacingDiameter)
   marbleLimit.value = perRing
   if (index >= perRing) {
     return null
@@ -904,13 +914,16 @@ const handleAddMarble = async () => {
     if (!position) {
       throw new Error('弹珠数量超出一圈容量')
     }
-    orientMarble(marble, position, {
+    const rotationConfig = {
       rotation: activeProductRotation.value,
       axis: activeProductRotationAxis.value
-    })
+    }
+    marble.userData.rotationConfig = rotationConfig
+    orientMarble(marble, position, rotationConfig)
     scene.add(marble)
     marbleInstances.push(marble)
     marbleCount.value = marbleInstances.length
+    reflowMarbles()
   } catch (error) {
     console.error('添加321失败', error)
     if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
