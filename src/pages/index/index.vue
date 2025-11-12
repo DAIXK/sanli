@@ -108,6 +108,24 @@ const ringMetrics = {
 }
 const tempVector = new THREE.Vector3()
 const selectionTarget = new THREE.Vector3()
+const axisVectors = {
+  x: new THREE.Vector3(1, 0, 0),
+  y: new THREE.Vector3(0, 1, 0),
+  z: new THREE.Vector3(0, 0, 1)
+}
+const ringOrientation = {
+  planeAxes: ['x', 'y'],
+  normalAxis: 'z'
+}
+const setRingOrientationBySize = (size) => {
+  const axisInfo = [
+    { axis: 'x', length: size.x },
+    { axis: 'y', length: size.y },
+    { axis: 'z', length: size.z }
+  ].sort((a, b) => a.length - b.length)
+  ringOrientation.normalAxis = axisInfo[0].axis
+  ringOrientation.planeAxes = [axisInfo[1].axis, axisInfo[2].axis]
+}
 const pointer = new THREE.Vector2()
 const raycaster = new THREE.Raycaster()
 let arrowIndicator = null
@@ -294,18 +312,19 @@ const fitCameraToModel = (root) => {
   const center = boundingBox.getCenter(new THREE.Vector3())
 
   root.position.sub(center)
+  setRingOrientationBySize(size)
   updateRingMetrics(root)
 
   if (!Number.isFinite(ringConfig.radius) || ringConfig.radius <= 0) {
-    const ringRadiusCandidate = Math.max(size.x, size.y) / 2
-    if (ringRadiusCandidate > 0) {
-      ringConfig.radius = ringRadiusCandidate
+    const fallbackRadius = Math.max(size.x, size.y, size.z) / 2
+    if (fallbackRadius > 0) {
+      ringConfig.radius = fallbackRadius
     }
   }
   if (!Number.isFinite(ringConfig.bandThickness) || ringConfig.bandThickness <= 0) {
-    ringConfig.bandThickness = Math.max(size.z || 0, 0)
+    ringConfig.bandThickness = Math.max(size[ringOrientation.normalAxis] || 0, 0)
   }
-  ringConfig.layerGap = Math.max(size.z * 0.8, 0.0008)
+  ringConfig.layerGap = Math.max((size[ringOrientation.normalAxis] || 0) * 0.8, 0.0008)
   ringConfig.offsetZ = 0
 
   const maxDim = Math.max(size.x, size.y, size.z) || 1
@@ -369,6 +388,7 @@ const updateRingMetrics = (root) => {
   if (!root) return
   ringMetrics.minRadius = Infinity
   ringMetrics.maxRadius = 0
+  const [axisA, axisB] = ringOrientation.planeAxes
   root.updateMatrixWorld(true)
   root.traverse((child) => {
     if (!child.isMesh) return
@@ -377,7 +397,9 @@ const updateRingMetrics = (root) => {
     for (let i = 0; i < position.count; i++) {
       tempVector.fromBufferAttribute(position, i)
       child.localToWorld(tempVector)
-      const radius = Math.hypot(tempVector.x, tempVector.y)
+      const coordA = tempVector[axisA]
+      const coordB = tempVector[axisB]
+      const radius = Math.hypot(coordA, coordB)
       if (!Number.isFinite(radius)) continue
       ringMetrics.minRadius = Math.min(ringMetrics.minRadius, radius)
       ringMetrics.maxRadius = Math.max(ringMetrics.maxRadius, radius)
@@ -438,14 +460,41 @@ const disposeArrowIndicator = () => {
 
 const highlightMarble = (marble) => {
   if (!marble || !scene) return
-  ensureArrowIndicator() // 确保箭头已创建
+  ensureArrowIndicator()
   if (!arrowIndicator) return
-  selectedMarble = marble // 记录当前被选弹珠
-  marble.getWorldPosition(selectionTarget) // 获取世界坐标，作为箭头目标点
-  const offset = Math.max(ringConfig.bandThickness || 0.01, marbleBounds.thickness || 0.01) + 0.01
-  arrowIndicator.position.copy(selectionTarget) // 基于弹珠位置摆放箭头
-  arrowIndicator.position.z += offset // 稍微抬高一点，避免与模型重合
-  arrowIndicator.lookAt(selectionTarget) // 指向弹珠中心
+  selectedMarble = marble
+  marble.getWorldPosition(selectionTarget)
+
+  const [axisA, axisB] = ringOrientation.planeAxes
+  const normalAxis = ringOrientation.normalAxis
+  const coordA = selectionTarget[axisA]
+  const coordB = selectionTarget[axisB]
+  const radialLength = Math.hypot(coordA, coordB)
+  if (!radialLength) return
+  const dirA = coordA / radialLength
+  const dirB = coordB / radialLength
+  const diameter = marbleBounds.diameter || 0.004
+  const radialCenter = Math.max(ringConfig.radius - (ringConfig.bandThickness || 0) / 2, 0)
+
+  const startPoint = new THREE.Vector3()
+  startPoint.addScaledVector(axisVectors[axisA], dirA * radialCenter)
+  startPoint.addScaledVector(axisVectors[axisB], dirB * radialCenter)
+  startPoint.addScaledVector(axisVectors[normalAxis], selectionTarget[normalAxis])
+
+  const endPoint = selectionTarget.clone()
+  const midPoint = startPoint.clone().lerp(endPoint, 0.5)
+  midPoint.addScaledVector(
+    axisVectors[normalAxis],
+    (ringConfig.bandThickness || marbleBounds.thickness || diameter) * 0.25
+  )
+
+  arrowIndicator.position.copy(midPoint)
+  const lookTarget = midPoint.clone()
+  lookTarget.addScaledVector(axisVectors[axisA], dirA)
+  lookTarget.addScaledVector(axisVectors[axisB], dirB)
+  arrowIndicator.lookAt(lookTarget)
+  const scaleFactor = Math.max(startPoint.distanceTo(endPoint), diameter * 0.8)
+  arrowIndicator.scale.setScalar(scaleFactor)
   arrowIndicator.visible = true
 }
 
@@ -667,21 +716,23 @@ const loadMarbleTemplate = () => {
 
 const getMarblePosition = (index) => {
   const circumference = Math.PI * 2 * ringConfig.radius // 根据手环半径计算当前圆周长度
-  
-  const diameter = marbleBounds.diameter  // 获取弹珠在平面内的最大直径
-  const thickness = marbleBounds.thickness  // 获取弹珠在平面内的最大厚度
-  const perRing = Math.max(6, Math.floor(circumference / (diameter * 1.001))) // 按直径估算一圈可放多少颗，额外乘系数预留间距
-  ringConfig.perRing = perRing // 将计算结果回写到配置，便于其他逻辑参考
-  marbleLimit.value = perRing // 同步给 UI 做上限提示
+  const diameter = marbleBounds.diameter // 获取弹珠在平面内的最大直径
+  const perRing = Math.max(6, Math.floor(circumference / (diameter * 1.001))) // 预留一点空隙
+  ringConfig.perRing = perRing
+  marbleLimit.value = perRing
   if (index >= perRing) {
-    return null // 超出容量直接返回空，提示无法添加
+    return null
   }
-  const angle = (index / perRing) * Math.PI * 2 // 将序号映射为当前圆上的角度
-  const radialOffset = (ringConfig.bandThickness || 0) / 2 // 手环厚度一半，用于向外偏移
-  const radius = Math.max(ringConfig.radius + radialOffset/6, diameter / 2) // 让珠子中心位于手环厚度中心线
-  const z = ringConfig.offsetZ // 仅允许单层，固定高度
-  console.log("circumference: ",circumference," diameter: ",diameter," angle: ",angle.toFixed(2)," radius: ",radius.toFixed(4),"radialOffset",radialOffset)
-  return new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, z) // 转回笛卡尔坐标
+  const angle = (index / perRing) * Math.PI * 2
+  const radialOffset = (ringConfig.bandThickness || 0) / 2
+  const radius = Math.max(ringConfig.radius + radialOffset, diameter / 2)
+  const [axisA, axisB] = ringOrientation.planeAxes
+  const normalAxis = ringOrientation.normalAxis
+  const position = new THREE.Vector3()
+  position.addScaledVector(axisVectors[axisA], Math.cos(angle) * radius)
+  position.addScaledVector(axisVectors[axisB], Math.sin(angle) * radius)
+  position.addScaledVector(axisVectors[normalAxis], ringConfig.offsetZ)
+  return position
 }
 
 const handleAddMarble = async () => {
