@@ -150,16 +150,16 @@ const MATERIAL_CONFIG = {
         glb: '/static/models/绿玛瑙1.gltf',
         name: '绿玛瑙',
         weight: '2',
-        width: '4mm',
+        width: '6mm',
         rotation: Math.PI / 2,
         rotationAxis: 'normal',
-        png: '/static/models/绿玛瑙.png'
+        png: '/static/models/绿玛瑙1.png'
       },
       {
         glb: '/static/models/绿玛瑙1.gltf',
         name: '金曜石',
         weight: '2',
-        width: '4mm',
+        width: '6mm',
         rotation: Math.PI / 2,
         rotationAxis: 'normal',
         png: '/static/models/金曜石.png'
@@ -168,7 +168,7 @@ const MATERIAL_CONFIG = {
         glb: '/static/models/绿玛瑙1.gltf',
         name: '红玛瑙',
         weight: '2',
-        width: '4mm',
+        width: '6mm',
         rotation: Math.PI / 2,
         rotationAxis: 'normal',
         png: '/static/models/红玛瑙.png'
@@ -177,7 +177,7 @@ const MATERIAL_CONFIG = {
         glb: '/static/models/绿玛瑙1.gltf',
         name: '黑玛瑙',
         weight: '2',
-        width: '4mm',
+        width: '6mm',
         rotation: Math.PI / 2,
         rotationAxis: 'normal',
         png: '/static/models/黑玛瑙.png'
@@ -186,16 +186,16 @@ const MATERIAL_CONFIG = {
         glb: '/static/models/绿玛瑙1.gltf',
         name: '绿玛瑙',
         weight: '2',
-        width: '4mm',
+        width: '6mm',
         rotation: Math.PI / 2,
         rotationAxis: 'normal',
-        png: '/static/models/绿玛瑙.png'
+        png: '/static/models/绿玛瑙1.png'
       },
       {
         glb: '/static/models/蓝玛瑙1.gltf',
         name: '蓝玛瑙',
         weight: '2',
-        width: '4mm',
+        width: '6mm',
         rotation: Math.PI / 2,
         rotationAxis: 'normal',
         png: '/static/models/蓝玛瑙.png'
@@ -204,7 +204,7 @@ const MATERIAL_CONFIG = {
         glb: '/static/models/绿玛瑙1.gltf',
         name: '虎眼珠',
         weight: '2',
-        width: '4mm',
+        width: '6mm',
         rotation: Math.PI / 2,
         rotationAxis: 'normal',
         png: '/static/models/虎眼珠.png'
@@ -213,7 +213,7 @@ const MATERIAL_CONFIG = {
         glb: '/static/models/绿玛瑙1.gltf',
         name: '白玛瑙',
         weight: '2',
-        width: '4mm',
+        width: '6mm',
         rotation: Math.PI / 2,
         rotationAxis: 'normal',
         png: '/static/models/白玛瑙.png'
@@ -252,10 +252,10 @@ const MATERIAL_CONFIG = {
         glb: '/static/models/绿玛瑙1.gltf',
         name: '绿玛瑙',
         weight: '2',
-        width: '4mm',
+        width: '6mm',
         rotation: Math.PI / 2,
         rotationAxis: 'normal',
-        png: '/static/models/绿玛瑙.png'
+        png: '/static/models/绿玛瑙1.png'
       }
     ]
   },
@@ -629,86 +629,6 @@ const reloadScene = async () => {
   }
 }
 
-watch(
-  ringSizeOptions,
-  (options) => {
-    const nextIndex = clampIndex(selectedRingSizeIndex.value, options.length)
-    selectedRingSizeIndex.value = nextIndex
-  },
-  { immediate: true }
-)
-
-watch(
-  beadSizeOptions,
-  (options) => {
-    const nextIndex = clampIndex(selectedBeadSizeIndex.value, options.length)
-    selectedBeadSizeIndex.value = nextIndex
-  },
-  { immediate: true }
-)
-
-watch(
-  productList,
-  (list) => {
-    if (!list.length) {
-      selectedProductIndex.value = 0
-      return
-    }
-    selectedProductIndex.value = clampIndex(selectedProductIndex.value, list.length)
-  },
-  { immediate: true }
-)
-
-watch(
-  activeBracelet,
-  () => {
-    selectedProductIndex.value = 0
-    selectedRingSizeIndex.value = 0
-    selectedBeadSizeIndex.value = 0
-    resetMarbles()
-    clearUndoHistory()
-    reloadScene()
-  },
-  { flush: 'post' }
-)
-
-watch(
-  activeBraceletName,
-  (name) => {
-    pageTitle.value = name || DEFAULT_PAGE_TITLE
-  },
-  { immediate: true }
-)
-
-watch(
-  activeRingOption,
-  (option) => {
-    if (option?.radius && Number.isFinite(option.radius)) {
-      ringConfig.radius = option.radius
-    }
-    reflowMarbles()
-  },
-  { immediate: true }
-)
-
-watch(
-  activeBeadOption,
-  (option) => {
-    const diameter = option?.diameter || 0.004
-    marbleBounds.diameter = diameter
-    marbleBounds.thickness = diameter
-    reflowMarbles()
-  },
-  { immediate: true }
-)
-
-watch(
-  modelUrl,
-  (newUrl, oldUrl) => {
-    if (!newUrl || !oldUrl || newUrl === oldUrl) return
-    reloadScene()
-  }
-)
 const tempQuaternion = new THREE.Quaternion()
 const setRingOrientationBySize = (size) => {
   const axisInfo = [
@@ -1383,6 +1303,86 @@ const computeMarblePosition = (index, diameterOverride) => {
   return null
 }
 
+watch(
+  ringSizeOptions,
+  (options) => {
+    const nextIndex = clampIndex(selectedRingSizeIndex.value, options.length)
+    selectedRingSizeIndex.value = nextIndex
+  },
+  { immediate: true }
+)
+
+watch(
+  beadSizeOptions,
+  (options) => {
+    const nextIndex = clampIndex(selectedBeadSizeIndex.value, options.length)
+    selectedBeadSizeIndex.value = nextIndex
+  },
+  { immediate: true }
+)
+
+watch(
+  productList,
+  (list) => {
+    if (!list.length) {
+      selectedProductIndex.value = 0
+      return
+    }
+    selectedProductIndex.value = clampIndex(selectedProductIndex.value, list.length)
+  },
+  { immediate: true }
+)
+
+watch(
+  activeBracelet,
+  () => {
+    selectedProductIndex.value = 0
+    selectedRingSizeIndex.value = 0
+    selectedBeadSizeIndex.value = 0
+    resetMarbles()
+    clearUndoHistory()
+    reloadScene()
+  },
+  { flush: 'post' }
+)
+
+watch(
+  activeBraceletName,
+  (name) => {
+    pageTitle.value = name || DEFAULT_PAGE_TITLE
+  },
+  { immediate: true }
+)
+
+watch(
+  activeRingOption,
+  (option) => {
+    if (option?.radius && Number.isFinite(option.radius)) {
+      ringConfig.radius = option.radius
+    }
+    reflowMarbles()
+  },
+  { immediate: true }
+)
+
+watch(
+  activeBeadOption,
+  (option) => {
+    const diameter = option?.diameter || 0.004
+    marbleBounds.diameter = diameter
+    marbleBounds.thickness = diameter
+    reflowMarbles()
+  },
+  { immediate: true }
+)
+
+watch(
+  modelUrl,
+  (newUrl, oldUrl) => {
+    if (!newUrl || !oldUrl || newUrl === oldUrl) return
+    reloadScene()
+  }
+)
 
 
 
