@@ -5,6 +5,7 @@ NORMAL_ROTATION = math.pi / 2
 
 MATERIAL_CONFIG = {
     "1": {
+        'price':'2288',
         "name": "桶珠手串",
         "background": [
             {"glb": "/static/models/圈圈45.gltf", "name": "桶珠手串", "length": 14},
@@ -108,6 +109,7 @@ MATERIAL_CONFIG = {
         ],
     },
     "2": {
+        'price':'2188',
         "name": "药片石手串",
         "background": [
             {"glb": "/static/models/圈圈45.gltf", "name": "桶珠手串", "length": 14},

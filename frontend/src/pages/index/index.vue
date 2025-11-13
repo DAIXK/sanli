@@ -143,6 +143,7 @@ const buildAssetUrl = (value) => {
 const normalizeCollection = (collection) => (Array.isArray(collection) ? collection : [])
 const transformMaterialEntry = (entry = {}) => ({
   ...entry,
+  price: Number(entry.price) || 0,
   background: normalizeCollection(entry.background).map((item) => ({
     ...item,
     glb: buildAssetUrl(item.glb),
@@ -162,6 +163,8 @@ const transformMaterialConfig = (config = {}) =>
     return acc
   }, {})
 const materialConfig = ref({})
+const price = ref(0)
+const formattedPrice = computed(() => price.value.toLocaleString('zh-CN'))
 
 const braceletTypes = computed(() => {
   const config = materialConfig.value || {}
@@ -188,6 +191,14 @@ const braceletProgress = computed(() => {
   return `${selectedBraceletIndex.value + 1}/${list.length}`
 })
 const backgroundOptions = computed(() => activeBracelet.value?.background ?? [])
+watch(
+  activeBracelet,
+  (bracelet) => {
+    const numericPrice = Number(bracelet?.price)
+    price.value = Number.isFinite(numericPrice) && numericPrice > 0 ? numericPrice : 0
+  },
+  { immediate: true }
+)
 const deriveRadius = (length, fallback) => {
   const numeric = Number(length)
   if (Number.isFinite(numeric) && numeric > 0) {
@@ -532,8 +543,6 @@ const ringOrientation = {
   planeAxes: ['x', 'y'],
   normalAxis: 'z'
 }
-const price = ref(2288)
-const formattedPrice = computed(() => price.value.toLocaleString('zh-CN'))
 const DEFAULT_PAGE_TITLE = '3D 模型预览'
 const pageTitle = ref(DEFAULT_PAGE_TITLE)
 const showH5Title = isH5
@@ -1209,9 +1218,10 @@ const disposeScene = () => {
   }
 }
 
-onMounted(() => {
-  fetchMaterialConfig()
-  nextTick(() => initScene())
+onMounted(async () => {
+  await fetchMaterialConfig()
+  await nextTick()
+  await initScene()
 })
 
 onBeforeUnmount(() => {
