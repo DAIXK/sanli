@@ -5,7 +5,7 @@
         <text class="price-text">¥ {{ formattedPrice }}</text>
        
       </view>
-      <button class="ghost-button" @tap="handleGenerateVideo">生成视频</button>
+      <button class="ghost-button" disabled="true" @tap="handleGenerateVideo">生成视频</button>
     </view>
 
     <view class="selector-row">
@@ -54,7 +54,13 @@
     </view>
 
     <view class="undo-container" v-if="productList.length">
-      <button class="undo-button" type="button" :disabled="!canUndo" @tap="handleUndo">
+      <button
+        class="undo-button"
+        type="button"
+        :class="{ 'is-disabled': !canUndo }"
+        :disabled="!canUndo"
+        @tap="handleUndo"
+      >
         <text class="undo-icon">↺</text>
       </button>
     </view>
@@ -250,7 +256,7 @@ const updateGlobalBounds = ({ diameter, thickness }) => {
 }
 const marbleInstances = []
 const undoStack = ref([])
-const canUndo = computed(() => undoStack.value.length > 0)
+const canUndo = computed(() => marbleCount.value > 0 && undoStack.value.length > 0)
 const ringConfig = {
   radius: 0.018,
   perRing: 28,
@@ -1130,7 +1136,7 @@ const handleAddMarble = async () => {
 
 .selector-label {
   font-size: 24rpx;
-  color: #6b7280;
+  color: #000000;
 }
 
 .selector-control {
@@ -1221,15 +1227,17 @@ const handleAddMarble = async () => {
   margin-right: 0;
 }
 
-.undo-button:disabled {
-  background: #e5e7eb;
+.undo-button:disabled,
+.undo-button.is-disabled {
+  background: #ffffff;
   border-color: rgba(0, 0, 0, 0.12);
   opacity: 1;
   box-shadow: none;
   cursor: not-allowed;
 }
 
-.undo-button:disabled .undo-icon {
+.undo-button:disabled .undo-icon,
+.undo-button.is-disabled .undo-icon {
   color: #9ca3af;
 }
 
