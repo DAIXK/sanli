@@ -1,11 +1,16 @@
 <template>
-  <view class="page">
+  <view class="page" @touchstart="handlePageTouchStart" @touchend="handlePageTouchEnd">
     <view class="toolbar">
       <view class="price-block">
         <text class="price-text">¥ {{ formattedPrice }}</text>
        
       </view>
       <button class="ghost-button" disabled="true" @tap="handleGenerateVideo">生成视频</button>
+    </view>
+
+    <view class="bracelet-indicator" v-if="activeBraceletName">
+      <text class="bracelet-name">{{ activeBraceletName }}</text>
+      <text class="bracelet-hint" v-if="braceletProgress">左右滑动 · {{ braceletProgress }}</text>
     </view>
 
     <view class="selector-row">
@@ -66,18 +71,36 @@
     </view>
 
     <view class="product-carousel" v-if="productList.length">
-      <scroll-view class="product-scroll" scroll-x="true" show-scrollbar="false">
-        <view
-          v-for="(item, index) in productList"
-          :key="item.glb || index"
-          class="product-item"
-          :class="{ active: selectedProductIndex === index }"
-          @tap="handleProductTap(index)"
-        >
-          <view class="product-thumb">
-            <image v-if="item.png" :src="item.png" mode="aspectFill" />
+      <scroll-view
+        class="product-scroll"
+        scroll-x="true"
+        show-scrollbar="false"
+        @touchstart.stop="noop"
+        @touchmove.stop="noop"
+        @touchend.stop="noop"
+      >
+        <view class="product-waterfall">
+          <view
+            class="product-column"
+            v-for="(column, columnIndex) in productColumns"
+            :key="columnIndex"
+          >
+            <view
+              v-for="columnItem in column"
+              :key="columnItem.item.glb || columnItem.index"
+              class="product-item"
+              :class="{ active: selectedProductIndex === columnItem.index }"
+              @tap="handleProductTap(columnItem.index)"
+            >
+              <view class="product-thumb">
+                <image v-if="columnItem.item.png" :src="columnItem.item.png" mode="aspectFill" />
+              </view>
+              <text class="product-name">{{ columnItem.item.name }}</text>
+              <text class="product-width" v-if="columnItem.item.width">
+                {{ columnItem.item.width }}
+              </text>
+            </view>
           </view>
-          <text class="product-name">{{ item.name }}</text>
         </view>
       </scroll-view>
     </view>
@@ -93,7 +116,8 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
-  toRaw
+  toRaw,
+  watch
 } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
@@ -101,31 +125,282 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 //可按 “radial/tangent/normal” 三种轴向做世界坐标旋转
 const MATERIAL_CONFIG = {
-  background: { glb: '/static/models/弹力绳.glb', name: '手环模型' },
-  product: [
-    {
-      glb: '/static/models/321.gltf',
-      name: '磨砂珠',
-      weight: '1',
-      rotation: (3 * Math.PI) / 2,
-      rotationAxis: 'radial',
-      png: '/static/models/磨砂珠.png'
-    },
-    {
-      glb: '/static/models/绿玛瑙1.gltf',
-      name: '绿玛瑙',
-      weight: '2',
-      rotation: Math.PI / 2,
-      rotationAxis: 'normal',
-      png: '/static/models/绿玛瑙.png'
-    }
-  ]
+  1:{
+    name:'桶珠手串',
+    background:[
+      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:14 },
+      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:15 },
+      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:16 },
+      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:18 },
+      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:19 },
+    ],
+    product: [
+      {
+        glb: '/static/models/321.gltf',
+        name: '磨砂珠',
+        weight: '1',
+        width: '6mm',
+        rotation: (3 * Math.PI) / 2,
+        rotationAxis: 'radial',
+        png: '/static/models/磨砂珠6mm.png'
+      },
+      {
+        glb: '/static/models/321.gltf',
+        name: '磨砂珠',
+        weight: '1',
+        width: '4mm',
+        rotation: (3 * Math.PI) / 2,
+        rotationAxis: 'radial',
+        png: '/static/models/磨砂珠4mm.png'
+      },
+      {
+        glb: '/static/models/绿玛瑙1.gltf',
+        name: '绿玛瑙',
+        weight: '2',
+        width: '4mm',
+        rotation: Math.PI / 2,
+        rotationAxis: 'normal',
+        png: '/static/models/绿玛瑙.png'
+      },
+      {
+        glb: '/static/models/绿玛瑙1.gltf',
+        name: '金曜石',
+        weight: '2',
+        width: '4mm',
+        rotation: Math.PI / 2,
+        rotationAxis: 'normal',
+        png: '/static/models/金曜石.png'
+      },
+      {
+        glb: '/static/models/绿玛瑙1.gltf',
+        name: '红玛瑙',
+        weight: '2',
+        width: '4mm',
+        rotation: Math.PI / 2,
+        rotationAxis: 'normal',
+        png: '/static/models/红玛瑙.png'
+      },
+      {
+        glb: '/static/models/绿玛瑙1.gltf',
+        name: '黑玛瑙',
+        weight: '2',
+        width: '4mm',
+        rotation: Math.PI / 2,
+        rotationAxis: 'normal',
+        png: '/static/models/黑玛瑙.png'
+      },
+      {
+        glb: '/static/models/绿玛瑙1.gltf',
+        name: '绿玛瑙',
+        weight: '2',
+        width: '4mm',
+        rotation: Math.PI / 2,
+        rotationAxis: 'normal',
+        png: '/static/models/绿玛瑙.png'
+      },
+      {
+        glb: '/static/models/蓝玛瑙1.gltf',
+        name: '蓝玛瑙',
+        weight: '2',
+        width: '4mm',
+        rotation: Math.PI / 2,
+        rotationAxis: 'normal',
+        png: '/static/models/蓝玛瑙.png'
+      },
+      {
+        glb: '/static/models/绿玛瑙1.gltf',
+        name: '虎眼珠',
+        weight: '2',
+        width: '4mm',
+        rotation: Math.PI / 2,
+        rotationAxis: 'normal',
+        png: '/static/models/虎眼珠.png'
+      },
+      {
+        glb: '/static/models/绿玛瑙1.gltf',
+        name: '白玛瑙',
+        weight: '2',
+        width: '4mm',
+        rotation: Math.PI / 2,
+        rotationAxis: 'normal',
+        png: '/static/models/白玛瑙.png'
+      }
+    ]
+  },
+  2:{
+    name:'药片石手串',
+    background:[
+      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:14 },
+      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:15 },
+      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:16 },
+      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:18 },
+      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:19 },
+    ],
+    product: [
+      {
+        glb: '/static/models/321.gltf',
+        name: '磨砂珠',
+        weight: '1',
+        width: '6mm',
+        rotation: (3 * Math.PI) / 2,
+        rotationAxis: 'radial',
+        png: '/static/models/磨砂珠6mm.png'
+      },
+      {
+        glb: '/static/models/321.gltf',
+        name: '磨砂珠',
+        weight: '1',
+        width: '4mm',
+        rotation: (3 * Math.PI) / 2,
+        rotationAxis: 'radial',
+        png: '/static/models/磨砂珠4mm.png'
+      },
+      {
+        glb: '/static/models/绿玛瑙1.gltf',
+        name: '绿玛瑙',
+        weight: '2',
+        width: '4mm',
+        rotation: Math.PI / 2,
+        rotationAxis: 'normal',
+        png: '/static/models/绿玛瑙.png'
+      }
+    ]
+  },
+
+
+
+
+  // background: { glb: '/static/models/弹力绳.glb', name: '桶珠手串' },
+  // product: [
+  //   {
+  //     glb: '/static/models/321.gltf',
+  //     name: '磨砂珠',
+  //     weight: '1',
+  //     rotation: (3 * Math.PI) / 2,
+  //     rotationAxis: 'radial',
+  //     png: '/static/models/磨砂珠.png'
+  //   },
+  //   {
+  //     glb: '/static/models/绿玛瑙1.gltf',
+  //     name: '绿玛瑙',
+  //     weight: '2',
+  //     rotation: Math.PI / 2,
+  //     rotationAxis: 'normal',
+  //     png: '/static/models/绿玛瑙.png'
+  //   }
+  // ]
 }
 
-const productList = MATERIAL_CONFIG.product || []
+const braceletTypes = Object.entries(MATERIAL_CONFIG).map(([id, config]) => ({
+  id,
+  ...config,
+  background: Array.isArray(config.background) ? config.background : [],
+  product: Array.isArray(config.product) ? config.product : []
+}))
+const selectedBraceletIndex = ref(0)
 const selectedProductIndex = ref(0)
-const activeProduct = computed(() => productList[selectedProductIndex.value] || {})
+const selectedRingSizeIndex = ref(0)
+const selectedBeadSizeIndex = ref(0)
+
+const activeBracelet = computed(
+  () => braceletTypes[selectedBraceletIndex.value] || braceletTypes[0] || { background: [], product: [] }
+)
+const activeBraceletName = computed(() => activeBracelet.value?.name || '')
+const braceletProgress = computed(() => {
+  if (braceletTypes.length <= 1) return ''
+  return `${selectedBraceletIndex.value + 1}/${braceletTypes.length}`
+})
+const backgroundOptions = computed(() => activeBracelet.value?.background ?? [])
+const deriveRadius = (length, fallback) => {
+  const numeric = Number(length)
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return numeric / 1000
+  }
+  return fallback
+}
+const ringSizeOptions = computed(() =>
+  backgroundOptions.value.map((item, index) => {
+    const label =
+      typeof item.length !== 'undefined'
+        ? `${item.length}cm`
+        : item.name || `圈长${index + 1}`
+    const radius = Number(item.radius)
+    return {
+      label,
+      radius: Number.isFinite(radius) ? radius : deriveRadius(item.length, ringConfig.radius),
+      glb: item.glb || '',
+      raw: item
+    }
+  })
+)
+const ringSizeLabels = computed(() => ringSizeOptions.value.map((item) => item.label))
+const activeRingOption = computed(
+  () => ringSizeOptions.value[selectedRingSizeIndex.value] || ringSizeOptions.value[0] || null
+)
+const modelUrl = computed(() => activeRingOption.value?.glb || '')
+
+const CANVAS_ID = 'modelCanvas'
+
+const parseWidthToDiameter = (width) => {
+  if (typeof width === 'number') {
+    return width / 1000
+  }
+  if (typeof width !== 'string') return null
+  const match = width.match(/[\d.]+/)
+  if (!match) return null
+  const value = Number(match[0])
+  if (!Number.isFinite(value)) return null
+  if (width.includes('cm')) {
+    return value / 100
+  }
+  return value / 1000
+}
+
+const rawProductList = computed(() => activeBracelet.value?.product ?? [])
+const beadSizeOptions = computed(() => {
+  const map = new Map()
+  rawProductList.value.forEach((product) => {
+    const widthLabel = product.width || product.diameter
+    if (!widthLabel || map.has(widthLabel)) return
+    map.set(widthLabel, {
+      label: widthLabel,
+      value: widthLabel,
+      diameter: parseWidthToDiameter(widthLabel)
+    })
+  })
+  if (!map.size) {
+    return [
+      {
+        label: '4mm',
+        value: '4mm',
+        diameter: 0.004
+      }
+    ]
+  }
+  return Array.from(map.values())
+})
+const beadSizeLabels = computed(() => beadSizeOptions.value.map((item) => item.label))
+const activeBeadOption = computed(
+  () => beadSizeOptions.value[selectedBeadSizeIndex.value] || beadSizeOptions.value[0] || null
+)
+const productList = computed(() => {
+  const targetWidth = activeBeadOption.value?.value
+  const list = rawProductList.value
+  if (!targetWidth) return list
+  const filtered = list.filter((item) => (item.width || item.diameter) === targetWidth)
+  return filtered.length ? filtered : list
+})
+const activeProduct = computed(() => productList.value[selectedProductIndex.value] || {})
 const activeProductGlb = computed(() => activeProduct.value?.glb || '')
+const PRODUCT_WATERFALL_COLUMNS = 2
+const productColumns = computed(() => {
+  const columns = Array.from({ length: PRODUCT_WATERFALL_COLUMNS }, () => [])
+  productList.value.forEach((item, index) => {
+    const columnIndex = index % PRODUCT_WATERFALL_COLUMNS
+    columns[columnIndex].push({ item, index })
+  })
+  return columns
+})
 const DEFAULT_FACE_ROTATION = (3 * Math.PI) / 2
 const activeProductRotation = computed(() => {
   const rotation = Number(activeProduct.value?.rotation)
@@ -136,9 +411,6 @@ const activeProductRotationAxis = computed(() => {
   return ['radial', 'tangent', 'normal'].includes(axis) ? axis : 'radial'
 })
 
-const MODEL_URL = MATERIAL_CONFIG.background?.glb || ''
-const CANVAS_ID = 'modelCanvas'
-
 const canvasRef = ref(null)
 const loadingText = ref('加载模型中...')
 const marbleLoading = ref(false)
@@ -146,9 +418,10 @@ const marbleCount = ref(0)
 const sceneReady = ref(false)
 const marbleLimit = ref(Infinity)
 const selectProduct = (index) => {
-  if (!Array.isArray(productList) || !productList.length) return
+  const list = productList.value
+  if (!Array.isArray(list) || !list.length) return
   if (!Number.isInteger(index)) return
-  const clamped = Math.min(Math.max(index, 0), productList.length - 1)
+  const clamped = Math.min(Math.max(index, 0), list.length - 1)
   selectedProductIndex.value = clamped
 }
 const handleProductTap = async (index) => {
@@ -159,13 +432,50 @@ const handleRingSizeChange = (event) => {
   const idx = Number(event?.detail?.value)
   if (Number.isNaN(idx)) return
   selectedRingSizeIndex.value = idx
-  applyRingSize(idx)
 }
 const handleBeadSizeChange = (event) => {
   const idx = Number(event?.detail?.value)
   if (Number.isNaN(idx)) return
   selectedBeadSizeIndex.value = idx
-  applyBeadSize(idx)
+}
+const SWIPE_THRESHOLD = 120
+const swipeState = {
+  startX: 0,
+  startY: 0,
+  active: false
+}
+const switchBracelet = (index) => {
+  if (!braceletTypes.length) return
+  const clamped = clampIndex(index, braceletTypes.length)
+  if (clamped === selectedBraceletIndex.value) return
+  selectedBraceletIndex.value = clamped
+}
+const handlePageTouchStart = (event) => {
+  const touch = event?.touches?.[0]
+  if (!touch) return
+  swipeState.startX = touch.clientX
+  swipeState.startY = touch.clientY
+  swipeState.active = true
+}
+const handlePageTouchEnd = (event) => {
+  if (!swipeState.active) return
+  const touch = event?.changedTouches?.[0]
+  if (!touch) {
+    swipeState.active = false
+    return
+  }
+  const deltaX = touch.clientX - swipeState.startX
+  const deltaY = touch.clientY - swipeState.startY
+  if (Math.abs(deltaX) < SWIPE_THRESHOLD || Math.abs(deltaX) < Math.abs(deltaY)) {
+    swipeState.active = false
+    return
+  }
+  if (deltaX < 0) {
+    switchBracelet(selectedBraceletIndex.value + 1)
+  } else {
+    switchBracelet(selectedBraceletIndex.value - 1)
+  }
+  swipeState.active = false
 }
 const handleGenerateVideo = () => {
   if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
@@ -177,6 +487,7 @@ const handleGenerateVideo = () => {
     console.info('Generate video triggered')
   }
 }
+const noop = () => {}
 
 const handleUndo = () => {
   if (!undoStack.value.length) {
@@ -281,35 +592,108 @@ const ringOrientation = {
 }
 const price = ref(2288)
 const formattedPrice = computed(() => price.value.toLocaleString('zh-CN'))
-const ringSizeOptions = [
-  { label: '15cm', radius: 0.016 },
-  { label: '17cm', radius: 0.018 },
-  { label: '19cm', radius: 0.02 }
-]
-const beadSizeOptions = [
-  { label: '4mm', diameter: 0.004 },
-  { label: '5mm', diameter: 0.005 },
-  { label: '6mm', diameter: 0.006 }
-]
-const ringSizeLabels = ringSizeOptions.map((item) => item.label)
-const beadSizeLabels = beadSizeOptions.map((item) => item.label)
-const selectedRingSizeIndex = ref(1)
-const selectedBeadSizeIndex = ref(0)
-const applyRingSize = (index) => {
-  const option = ringSizeOptions[index]
-  if (!option) return
-  ringConfig.radius = option.radius
-  reflowMarbles()
+const clampIndex = (index, length) => {
+  if (!Number.isInteger(index)) return 0
+  if (!Number.isInteger(length) || length <= 0) return 0
+  return Math.min(Math.max(index, 0), length - 1)
 }
-const applyBeadSize = (index) => {
-  const option = beadSizeOptions[index]
-  if (!option) return
-  marbleBounds.diameter = option.diameter
-  marbleBounds.thickness = option.diameter
-  reflowMarbles()
+
+const resetMarbles = () => {
+  if (scene && marbleInstances.length) {
+    marbleInstances.forEach((item) => scene.remove(item))
+  }
+  marbleInstances.length = 0
+  marbleCount.value = 0
+  marbleLimit.value = Infinity
 }
-marbleBounds.diameter = beadSizeOptions[selectedBeadSizeIndex.value]?.diameter || 0.004
-marbleBounds.thickness = marbleBounds.diameter
+
+let reloadingScene = false
+const reloadScene = async () => {
+  if (reloadingScene) return
+  reloadingScene = true
+  try {
+    disposeScene()
+    await nextTick()
+    await initScene()
+  } catch (error) {
+    console.error('重建场景失败', error)
+  } finally {
+    reloadingScene = false
+  }
+}
+
+watch(
+  ringSizeOptions,
+  (options) => {
+    const nextIndex = clampIndex(selectedRingSizeIndex.value, options.length)
+    selectedRingSizeIndex.value = nextIndex
+  },
+  { immediate: true }
+)
+
+watch(
+  beadSizeOptions,
+  (options) => {
+    const nextIndex = clampIndex(selectedBeadSizeIndex.value, options.length)
+    selectedBeadSizeIndex.value = nextIndex
+  },
+  { immediate: true }
+)
+
+watch(
+  productList,
+  (list) => {
+    if (!list.length) {
+      selectedProductIndex.value = 0
+      return
+    }
+    selectedProductIndex.value = clampIndex(selectedProductIndex.value, list.length)
+  },
+  { immediate: true }
+)
+
+watch(
+  activeBracelet,
+  () => {
+    selectedProductIndex.value = 0
+    selectedRingSizeIndex.value = 0
+    selectedBeadSizeIndex.value = 0
+    resetMarbles()
+    clearUndoHistory()
+    reloadScene()
+  },
+  { flush: 'post' }
+)
+
+watch(
+  activeRingOption,
+  (option) => {
+    if (option?.radius && Number.isFinite(option.radius)) {
+      ringConfig.radius = option.radius
+    }
+    reflowMarbles()
+  },
+  { immediate: true }
+)
+
+watch(
+  activeBeadOption,
+  (option) => {
+    const diameter = option?.diameter || 0.004
+    marbleBounds.diameter = diameter
+    marbleBounds.thickness = diameter
+    reflowMarbles()
+  },
+  { immediate: true }
+)
+
+watch(
+  modelUrl,
+  (newUrl, oldUrl) => {
+    if (!newUrl || !oldUrl || newUrl === oldUrl) return
+    reloadScene()
+  }
+)
 const tempQuaternion = new THREE.Quaternion()
 const setRingOrientationBySize = (size) => {
   const axisInfo = [
@@ -491,9 +875,14 @@ const addLights = () => {
 
 const loadModel = () => {
   return new Promise((resolve, reject) => {
+    const url = modelUrl.value
+    if (!url) {
+      reject(new Error('未找到手串模型'))
+      return
+    }
     const loader = new GLTFLoader()
     loader.load(
-      MODEL_URL,
+      url,
       (gltf) => {
         const root = gltf.scene || gltf.scenes?.[0]
         if (!root) {
@@ -1128,6 +1517,24 @@ const handleAddMarble = async () => {
   align-items: center;
 }
 
+.bracelet-indicator {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 4rpx;
+}
+
+.bracelet-name {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #111827;
+}
+
+.bracelet-hint {
+  font-size: 22rpx;
+  color: #9ca3af;
+}
+
 .selector-field {
   display: flex;
   align-items: center;
@@ -1229,7 +1636,7 @@ const handleAddMarble = async () => {
 
 .undo-button:disabled,
 .undo-button.is-disabled {
-  background: #ffffff;
+  background: #e5e7eb;
   border-color: rgba(0, 0, 0, 0.12);
   opacity: 1;
   box-shadow: none;
@@ -1255,18 +1662,28 @@ const handleAddMarble = async () => {
 
 .product-scroll {
   white-space: nowrap;
+  display: flex;
+}
+
+.product-waterfall {
+  display: flex;
+  gap: 32rpx;
+}
+
+.product-column {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
 }
 
 .product-item {
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12rpx;
-  margin-right: 24rpx;
-}
-
-.product-item:last-child {
-  margin-right: 0;
+  padding: 12rpx 8rpx;
+  border-radius: 24rpx;
+  min-width: 140rpx;
 }
 
 .product-item.active .product-thumb {
@@ -1292,5 +1709,10 @@ const handleAddMarble = async () => {
 .product-name {
   font-size: 24rpx;
   color: #4b5563;
+}
+
+.product-width {
+  font-size: 22rpx;
+  color: #9ca3af;
 }
 </style>
