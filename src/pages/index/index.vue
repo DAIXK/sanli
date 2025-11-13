@@ -79,28 +79,18 @@
         @touchmove.stop="noop"
         @touchend.stop="noop"
       >
-        <view class="product-waterfall">
-          <view
-            class="product-column"
-            v-for="(column, columnIndex) in productColumns"
-            :key="columnIndex"
-          >
-            <view
-              v-for="columnItem in column"
-              :key="columnItem.item.glb || columnItem.index"
-              class="product-item"
-              :class="{ active: selectedProductIndex === columnItem.index }"
-              @tap="handleProductTap(columnItem.index)"
-            >
-              <view class="product-thumb">
-                <image v-if="columnItem.item.png" :src="columnItem.item.png" mode="aspectFill" />
-              </view>
-              <text class="product-name">{{ columnItem.item.name }}</text>
-              <text class="product-width" v-if="columnItem.item.width">
-                {{ columnItem.item.width }}
-              </text>
-            </view>
+        <view
+          v-for="(item, index) in productList"
+          :key="item.glb || index"
+          class="product-item"
+          :class="{ active: selectedProductIndex === index }"
+          @tap="handleProductTap(index)"
+        >
+          <view class="product-thumb">
+            <image v-if="item.png" :src="item.png" mode="aspectFill" />
           </view>
+          <text class="product-name">{{ item.name }}</text>
+          <text class="product-width" v-if="item.width">{{ item.width }}</text>
         </view>
       </scroll-view>
     </view>
@@ -392,15 +382,6 @@ const productList = computed(() => {
 })
 const activeProduct = computed(() => productList.value[selectedProductIndex.value] || {})
 const activeProductGlb = computed(() => activeProduct.value?.glb || '')
-const PRODUCT_WATERFALL_COLUMNS = 2
-const productColumns = computed(() => {
-  const columns = Array.from({ length: PRODUCT_WATERFALL_COLUMNS }, () => [])
-  productList.value.forEach((item, index) => {
-    const columnIndex = index % PRODUCT_WATERFALL_COLUMNS
-    columns[columnIndex].push({ item, index })
-  })
-  return columns
-})
 const DEFAULT_FACE_ROTATION = (3 * Math.PI) / 2
 const activeProductRotation = computed(() => {
   const rotation = Number(activeProduct.value?.rotation)
@@ -1663,27 +1644,18 @@ const handleAddMarble = async () => {
 .product-scroll {
   white-space: nowrap;
   display: flex;
-}
-
-.product-waterfall {
-  display: flex;
-  gap: 32rpx;
-}
-
-.product-column {
-  display: flex;
-  flex-direction: column;
   gap: 24rpx;
 }
 
 .product-item {
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
   align-items: center;
   gap: 12rpx;
   padding: 12rpx 8rpx;
   border-radius: 24rpx;
   min-width: 140rpx;
+  margin-right: 12rpx;
 }
 
 .product-item.active .product-thumb {
