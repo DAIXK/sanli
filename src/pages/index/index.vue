@@ -1022,6 +1022,7 @@ const handleAddMarble = async () => {
   color: #111827;
   box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.05);
   margin-left: auto;
+  margin-right: 0;
 }
 
 .selector-row {
@@ -1046,7 +1047,7 @@ const handleAddMarble = async () => {
 }
 
 .selector-value {
-  padding: 10rpx 20rpx;
+  padding: 10rpx 0rpx;
   border: 1rpx solid #d1d5db;
   border-radius: 12rpx;
   font-size: 26rpx;
