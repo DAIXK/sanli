@@ -11,10 +11,7 @@
       <button class="ghost-button" disabled="true" @tap="handleGenerateVideo">生成视频</button>
     </view>
 
-    <view class="bracelet-indicator" v-if="activeBraceletName">
-      <text class="bracelet-name">{{ activeBraceletName }}</text>
-      <!-- <text class="bracelet-hint" v-if="braceletProgress">左右滑动 · {{ braceletProgress }}</text> -->
-    </view>
+
 
     <view class="selector-row">
       <view class="selector-field">
@@ -90,7 +87,12 @@
           @tap="handleProductTap(index)"
         >
           <view class="product-thumb">
-            <image v-if="item.png" :src="item.png" mode="aspectFill" />
+            <image
+              v-if="item.png"
+              class="product-thumb-image"
+              :src="item.png"
+              mode="aspectFill"
+            />
           </view>
           <text class="product-name">{{ item.name }}</text>
           <text class="product-width" v-if="item.width">{{ item.width }}</text>
@@ -117,191 +119,74 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 //可按 “radial/tangent/normal” 三种轴向做世界坐标旋转
-const MATERIAL_CONFIG = {
-  1:{
-    name:'桶珠手串',
-    background:[
-      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:14 },
-      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:15 },
-      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:16 },
-      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:18 },
-      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:19 },
-    ],
-    product: [
-      {
-        glb: '/static/models/321.gltf',
-        name: '磨砂珠',
-        weight: '1',
-        width: '6mm',
-        rotation: (3 * Math.PI) / 2,
-        rotationAxis: 'radial',
-        png: '/static/models/磨砂珠6mm.png'
-      },
-      {
-        glb: '/static/models/321.gltf',
-        name: '磨砂珠',
-        weight: '1',
-        width: '4mm',
-        rotation: (3 * Math.PI) / 2,
-        rotationAxis: 'radial',
-        png: '/static/models/磨砂珠4mm.png'
-      },
-      {
-        glb: '/static/models/绿玛瑙1.gltf',
-        name: '绿玛瑙',
-        weight: '2',
-        width: '6mm',
-        rotation: Math.PI / 2,
-        rotationAxis: 'normal',
-        png: '/static/models/绿玛瑙1.png'
-      },
-      {
-        glb: '/static/models/绿玛瑙1.gltf',
-        name: '金曜石',
-        weight: '2',
-        width: '6mm',
-        rotation: Math.PI / 2,
-        rotationAxis: 'normal',
-        png: '/static/models/金曜石.png'
-      },
-      {
-        glb: '/static/models/绿玛瑙1.gltf',
-        name: '红玛瑙',
-        weight: '2',
-        width: '6mm',
-        rotation: Math.PI / 2,
-        rotationAxis: 'normal',
-        png: '/static/models/红玛瑙.png'
-      },
-      {
-        glb: '/static/models/绿玛瑙1.gltf',
-        name: '黑玛瑙',
-        weight: '2',
-        width: '6mm',
-        rotation: Math.PI / 2,
-        rotationAxis: 'normal',
-        png: '/static/models/黑玛瑙.png'
-      },
-      {
-        glb: '/static/models/绿玛瑙1.gltf',
-        name: '绿玛瑙',
-        weight: '2',
-        width: '6mm',
-        rotation: Math.PI / 2,
-        rotationAxis: 'normal',
-        png: '/static/models/绿玛瑙1.png'
-      },
-      {
-        glb: '/static/models/蓝玛瑙1.gltf',
-        name: '蓝玛瑙',
-        weight: '2',
-        width: '6mm',
-        rotation: Math.PI / 2,
-        rotationAxis: 'normal',
-        png: '/static/models/蓝玛瑙.png'
-      },
-      {
-        glb: '/static/models/绿玛瑙1.gltf',
-        name: '虎眼珠',
-        weight: '2',
-        width: '6mm',
-        rotation: Math.PI / 2,
-        rotationAxis: 'normal',
-        png: '/static/models/虎眼珠.png'
-      },
-      {
-        glb: '/static/models/绿玛瑙1.gltf',
-        name: '白玛瑙',
-        weight: '2',
-        width: '6mm',
-        rotation: Math.PI / 2,
-        rotationAxis: 'normal',
-        png: '/static/models/白玛瑙.png'
-      }
-    ]
-  },
-  2:{
-    name:'药片石手串',
-    background:[
-      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:14 },
-      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:15 },
-      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:16 },
-      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:18 },
-      { glb: '/static/models/弹力绳.glb', name: '桶珠手串', length:19 },
-    ],
-    product: [
-      {
-        glb: '/static/models/321.gltf',
-        name: '磨砂珠',
-        weight: '1',
-        width: '6mm',
-        rotation: (3 * Math.PI) / 2,
-        rotationAxis: 'radial',
-        png: '/static/models/磨砂珠6mm.png'
-      },
-      {
-        glb: '/static/models/321.gltf',
-        name: '磨砂珠',
-        weight: '1',
-        width: '4mm',
-        rotation: (3 * Math.PI) / 2,
-        rotationAxis: 'radial',
-        png: '/static/models/磨砂珠4mm.png'
-      },
-      {
-        glb: '/static/models/绿玛瑙1.gltf',
-        name: '绿玛瑙',
-        weight: '2',
-        width: '6mm',
-        rotation: Math.PI / 2,
-        rotationAxis: 'normal',
-        png: '/static/models/绿玛瑙1.png'
-      }
-    ]
-  },
 
 
-
-
-  // background: { glb: '/static/models/弹力绳.glb', name: '桶珠手串' },
-  // product: [
-  //   {
-  //     glb: '/static/models/321.gltf',
-  //     name: '磨砂珠',
-  //     weight: '1',
-  //     rotation: (3 * Math.PI) / 2,
-  //     rotationAxis: 'radial',
-  //     png: '/static/models/磨砂珠.png'
-  //   },
-  //   {
-  //     glb: '/static/models/绿玛瑙1.gltf',
-  //     name: '绿玛瑙',
-  //     weight: '2',
-  //     rotation: Math.PI / 2,
-  //     rotationAxis: 'normal',
-  //     png: '/static/models/绿玛瑙.png'
-  //   }
-  // ]
+const DEFAULT_API_BASE_URL = 'http://localhost:5001'
+let envApiBaseUrl = ''
+try {
+  envApiBaseUrl = import.meta.env?.VITE_API_BASE_URL || ''
+} catch (error) {
+  envApiBaseUrl = ''
 }
+const normalizeBaseUrl = (value) => {
+  if (typeof value !== 'string') return ''
+  return value.replace(/\/+$/, '')
+}
+const API_BASE_URL = normalizeBaseUrl(envApiBaseUrl || DEFAULT_API_BASE_URL)
+const MATERIAL_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/api/materials` : ''
+const isAbsoluteUrl = (value) => typeof value === 'string' && /^https?:\/\//i.test(value)
+const buildAssetUrl = (value) => {
+  if (typeof value !== 'string' || !value) return value
+  if (!API_BASE_URL || isAbsoluteUrl(value)) return value
+  const normalizedPath = value.startsWith('/') ? value : `/${value}`
+  return `${API_BASE_URL}${normalizedPath}`
+}
+const normalizeCollection = (collection) => (Array.isArray(collection) ? collection : [])
+const transformMaterialEntry = (entry = {}) => ({
+  ...entry,
+  background: normalizeCollection(entry.background).map((item) => ({
+    ...item,
+    glb: buildAssetUrl(item.glb),
+    png: buildAssetUrl(item.png)
+  })),
+  product: normalizeCollection(entry.product).map((item) => ({
+    ...item,
+    glb: buildAssetUrl(item.glb),
+    png: buildAssetUrl(item.png)
+  }))
+})
+const transformMaterialConfig = (config = {}) =>
+  Object.entries(config || {}).reduce((acc, [id, entry]) => {
+    if (entry && typeof entry === 'object') {
+      acc[id] = transformMaterialEntry(entry)
+    }
+    return acc
+  }, {})
+const materialConfig = ref({})
 
-const braceletTypes = Object.entries(MATERIAL_CONFIG).map(([id, config]) => ({
-  id,
-  ...config,
-  background: Array.isArray(config.background) ? config.background : [],
-  product: Array.isArray(config.product) ? config.product : []
-}))
+const braceletTypes = computed(() => {
+  const config = materialConfig.value || {}
+  return Object.entries(config).map(([id, entry]) => ({
+    id,
+    ...entry,
+    background: Array.isArray(entry?.background) ? entry.background : [],
+    product: Array.isArray(entry?.product) ? entry.product : []
+  }))
+})
 const selectedBraceletIndex = ref(0)
 const selectedProductIndex = ref(0)
 const selectedRingSizeIndex = ref(0)
 const selectedBeadSizeIndex = ref(0)
 
-const activeBracelet = computed(
-  () => braceletTypes[selectedBraceletIndex.value] || braceletTypes[0] || { background: [], product: [] }
-)
+const activeBracelet = computed(() => {
+  const list = braceletTypes.value
+  return list[selectedBraceletIndex.value] || list[0] || { background: [], product: [] }
+})
 const activeBraceletName = computed(() => activeBracelet.value?.name || '')
 const braceletProgress = computed(() => {
-  if (braceletTypes.length <= 1) return ''
-  return `${selectedBraceletIndex.value + 1}/${braceletTypes.length}`
+  const list = braceletTypes.value
+  if (list.length <= 1) return ''
+  return `${selectedBraceletIndex.value + 1}/${list.length}`
 })
 const backgroundOptions = computed(() => activeBracelet.value?.background ?? [])
 const deriveRadius = (length, fallback) => {
@@ -429,8 +314,9 @@ const swipeState = {
   active: false
 }
 const switchBracelet = (index) => {
-  if (!braceletTypes.length) return
-  const clamped = clampIndex(index, braceletTypes.length)
+  const list = braceletTypes.value
+  if (!list.length) return
+  const clamped = clampIndex(index, list.length)
   if (clamped === selectedBraceletIndex.value) return
   selectedBraceletIndex.value = clamped
 }
@@ -472,6 +358,51 @@ const handleGenerateVideo = () => {
   }
 }
 const noop = () => {}
+
+const requestJson = (url) => {
+  if (!url) return Promise.reject(new Error('缺少请求地址'))
+  if (typeof uni !== 'undefined' && typeof uni.request === 'function') {
+    return new Promise((resolve, reject) => {
+      uni.request({
+        url,
+        method: 'GET',
+        success: (response) => resolve(response?.data),
+        fail: (error) => reject(error)
+      })
+    })
+  }
+  if (typeof fetch === 'function') {
+    return fetch(url).then((response) => {
+      if (!response.ok) {
+        throw new Error(`请求失败: ${response.status}`)
+      }
+      return response.json()
+    })
+  }
+  return Promise.reject(new Error('当前环境缺少网络请求能力'))
+}
+
+const fetchMaterialConfig = async () => {
+  if (!MATERIAL_ENDPOINT) return
+  try {
+    const data = await requestJson(MATERIAL_ENDPOINT)
+    if (data && typeof data === 'object') {
+      materialConfig.value = transformMaterialConfig(data)
+      selectedBraceletIndex.value = 0
+      selectedRingSizeIndex.value = 0
+      selectedBeadSizeIndex.value = 0
+      selectedProductIndex.value = 0
+    }
+  } catch (error) {
+    console.error('获取素材配置失败', error)
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '素材数据加载失败',
+        icon: 'none'
+      })
+    }
+  }
+}
 
 const handleUndo = () => {
   if (!undoStack.value.length) {
@@ -1203,6 +1134,7 @@ const disposeScene = () => {
 }
 
 onMounted(() => {
+  fetchMaterialConfig()
   nextTick(() => initScene())
 })
 
@@ -1721,9 +1653,11 @@ const handleAddMarble = async () => {
   transition: transform 0.2s ease;
 }
 
-.product-thumb image {
+.product-thumb-image {
   width: 100%;
   height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .product-name {
