@@ -9,24 +9,30 @@
     </view>
 
     <view class="selector-row">
-      <picker
-        class="selector"
-        mode="selector"
-        :value="selectedRingSizeIndex"
-        :range="ringSizeLabels"
-        @change="handleRingSizeChange"
-      >
-        <view class="selector-display">圈长 {{ ringSizeLabels[selectedRingSizeIndex] }}</view>
-      </picker>
-      <picker
-        class="selector"
-        mode="selector"
-        :value="selectedBeadSizeIndex"
-        :range="beadSizeLabels"
-        @change="handleBeadSizeChange"
-      >
-        <view class="selector-display">珠径 {{ beadSizeLabels[selectedBeadSizeIndex] }}</view>
-      </picker>
+      <view class="selector-field">
+        <text class="selector-label">圈长</text>
+        <picker
+          class="selector-control"
+          mode="selector"
+          :value="selectedRingSizeIndex"
+          :range="ringSizeLabels"
+          @change="handleRingSizeChange"
+        >
+          <view class="selector-value">{{ ringSizeLabels[selectedRingSizeIndex] }}</view>
+        </picker>
+      </view>
+      <view class="selector-field">
+        <text class="selector-label">珠径</text>
+        <picker
+          class="selector-control"
+          mode="selector"
+          :value="selectedBeadSizeIndex"
+          :range="beadSizeLabels"
+          @change="handleBeadSizeChange"
+        >
+          <view class="selector-value">{{ beadSizeLabels[selectedBeadSizeIndex] }}</view>
+        </picker>
+      </view>
     </view>
 
     <view class="viewer-card">
@@ -987,6 +993,7 @@ const handleAddMarble = async () => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 16rpx;
 }
 
 .price-block {
@@ -1008,30 +1015,44 @@ const handleAddMarble = async () => {
 
 .ghost-button {
   background: #fff;
-  border-radius: 999rpx;
-  border: 1rpx solid rgba(0, 0, 0, 0.08);
-  padding: 12rpx 28rpx;
-  font-size: 24rpx;
+  border-radius: 20rpx;
+  border: 1rpx solid rgba(0, 0, 0, 0.12);
+  // padding: 12rpx 32rpx;
+  font-size: 26rpx;
   color: #111827;
   box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.05);
+  margin-left: auto;
 }
 
 .selector-row {
   display: flex;
-  gap: 16rpx;
+  gap: 28rpx;
+  align-items: center;
 }
 
-.selector {
-  flex: 1;
+.selector-field {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
 }
 
-.selector-display {
-  background: #fff;
-  border-radius: 16rpx;
-  padding: 18rpx 24rpx;
-  border: 1rpx solid #e5e7eb;
+.selector-label {
+  font-size: 24rpx;
+  color: #6b7280;
+}
+
+.selector-control {
+  display: inline-flex;
+}
+
+.selector-value {
+  padding: 10rpx 20rpx;
+  border: 1rpx solid #d1d5db;
+  border-radius: 12rpx;
   font-size: 26rpx;
   color: #1f2937;
+  min-width: 120rpx;
+  text-align: center;
 }
 
 .viewer-card {
