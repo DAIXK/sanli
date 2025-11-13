@@ -3,7 +3,7 @@
     <view class="toolbar">
       <view class="price-block">
         <text class="price-text">¥ {{ formattedPrice }}</text>
-        <text class="price-subtitle">含税到手价</text>
+       
       </view>
       <button class="ghost-button" @tap="handleGenerateVideo">生成视频</button>
     </view>
@@ -51,6 +51,12 @@
       <view class="loading" v-if="loadingText">
         <text>{{ loadingText }}</text>
       </view>
+    </view>
+
+    <view class="undo-container" v-if="productList.length">
+      <button class="undo-button" type="button" :disabled="!canUndo" @tap="handleUndo">
+        <text class="undo-icon">↺</text>
+      </button>
     </view>
 
     <view class="product-carousel" v-if="productList.length">
@@ -156,6 +162,48 @@ const handleGenerateVideo = () => {
     console.info('Generate video triggered')
   }
 }
+
+const handleUndo = () => {
+  if (!undoStack.value.length) {
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '暂无可撤销操作',
+        icon: 'none'
+      })
+    } else {
+      console.info('No undo actions available')
+    }
+    return
+  }
+  const entry = undoStack.value.pop()
+  if (!entry) return
+  let success = false
+  if (entry.type === 'add') {
+    success = removeMarble(entry.marble, { record: false })
+  } else if (entry.type === 'remove') {
+    success = restoreMarble(entry.marble, entry.index)
+  }
+  if (!success) {
+    undoStack.value.push(entry)
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '撤销失败',
+        icon: 'none'
+      })
+    } else {
+      console.warn('Undo failed')
+    }
+    return
+  }
+  if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+    uni.showToast({
+      title: '已撤销',
+      icon: 'none'
+    })
+  } else {
+    console.info('Undo applied')
+  }
+}
 const raf =
   typeof requestAnimationFrame === 'function'
     ? requestAnimationFrame
@@ -190,6 +238,8 @@ const updateGlobalBounds = ({ diameter, thickness }) => {
   }
 }
 const marbleInstances = []
+const undoStack = ref([])
+const canUndo = computed(() => undoStack.value.length > 0)
 const ringConfig = {
   radius: 0.018,
   perRing: 28,
@@ -266,6 +316,14 @@ const cancelLongPressTimer = () => {
     longPressTimer = null
   }
   pendingMarble = null
+}
+
+const pushUndoEntry = (entry) => {
+  undoStack.value.push(entry)
+}
+
+const clearUndoHistory = () => {
+  undoStack.value.length = 0
 }
 
 const getRefElement = () => {
@@ -557,7 +615,18 @@ const resolveMarbleFromObject = (object) => {
   return current || null
 }
 
-const removeMarble = (marble) => {
+const restoreMarble = (marble, index = marbleInstances.length) => {
+  if (!scene || !marble) return false
+  const clamped = Math.min(Math.max(index, 0), marbleInstances.length)
+  scene.add(marble)
+  marbleInstances.splice(clamped, 0, marble)
+  marbleCount.value = marbleInstances.length
+  marbleLimit.value = Infinity
+  reflowMarbles()
+  return true
+}
+
+const removeMarble = (marble, { record = true } = {}) => {
   if (!marble || !scene) return false
   const target = resolveMarbleFromObject(marble)
   if (!target) return false
@@ -568,12 +637,15 @@ const removeMarble = (marble) => {
   marbleInstances.splice(index, 1)
   marbleCount.value = marbleInstances.length
   marbleLimit.value = Infinity
+  if (record) {
+    pushUndoEntry({ type: 'remove', marble: target, index })
+  }
   reflowMarbles()
   return true
 }
 
-const removeMarbleWithFeedback = (marble) => {
-  const removed = removeMarble(marble)
+const removeMarbleWithFeedback = (marble, options = {}) => {
+  const removed = removeMarble(marble, options)
   if (!removed) return false
   if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
     uni.showToast({
@@ -760,6 +832,7 @@ const disposeScene = () => {
   pmremGenerator?.dispose?.()
   pmremGenerator = null
   cancelLongPressTimer()
+  clearUndoHistory()
   try {
     pointerTeardown?.()
   } catch (error) {
@@ -963,6 +1036,7 @@ const handleAddMarble = async () => {
     marbleInstances.push(marble)
     marbleCount.value = marbleInstances.length
     marbleLimit.value = Infinity
+    pushUndoEntry({ type: 'add', marble })
     reflowMarbles()
   } catch (error) {
     console.error('添加珠子失败', error)
@@ -1067,7 +1141,7 @@ const handleAddMarble = async () => {
   height: 0;
   border-left: 8rpx solid transparent;
   border-right: 8rpx solid transparent;
-  border-top: 10rpx solid #111827;
+  border-top: 10rpx solid #0e0f0f;
   pointer-events: none;
 }
 
@@ -1112,6 +1186,32 @@ const handleAddMarble = async () => {
   justify-content: center;
   font-size: 28rpx;
   color: #4b5563;
+}
+
+.undo-container {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16rpx 0;
+}
+
+.undo-button {
+  border: none;
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 0rpx 28rpx;
+  box-shadow: 0 8rpx 18rpx rgba(0, 0, 0, 0.08);
+  border: 1rpx solid rgba(0, 0, 0, 0.08);
+  margin-right: 0;
+}
+
+.undo-button:disabled {
+  opacity: 0.4;
+  box-shadow: none;
+}
+
+.undo-icon {
+  font-size: 32rpx;
+  color: #111827;
 }
 
 .product-carousel {
