@@ -1,5 +1,8 @@
 <template>
   <view class="page" @touchstart="handlePageTouchStart" @touchend="handlePageTouchEnd">
+    <view class="page-title-bar" v-if="showH5Title">
+      <text class="page-title-text">{{ pageTitle }}</text>
+    </view>
     <view class="toolbar">
       <view class="price-block">
         <text class="price-text">¥ {{ formattedPrice }}</text>
@@ -10,7 +13,7 @@
 
     <view class="bracelet-indicator" v-if="activeBraceletName">
       <text class="bracelet-name">{{ activeBraceletName }}</text>
-      <text class="bracelet-hint" v-if="braceletProgress">左右滑动 · {{ braceletProgress }}</text>
+      <!-- <text class="bracelet-hint" v-if="braceletProgress">左右滑动 · {{ braceletProgress }}</text> -->
     </view>
 
     <view class="selector-row">
@@ -573,6 +576,29 @@ const ringOrientation = {
 }
 const price = ref(2288)
 const formattedPrice = computed(() => price.value.toLocaleString('zh-CN'))
+const DEFAULT_PAGE_TITLE = '3D 模型预览'
+const pageTitle = ref(DEFAULT_PAGE_TITLE)
+const showH5Title = isH5
+const applyPageTitle = (title) => {
+  const finalTitle = title || DEFAULT_PAGE_TITLE
+  if (typeof document !== 'undefined') {
+    document.title = finalTitle
+  }
+  if (typeof uni !== 'undefined' && typeof uni.setNavigationBarTitle === 'function') {
+    try {
+      uni.setNavigationBarTitle({ title: finalTitle })
+    } catch (error) {
+      console.warn('Failed to set navigation title', error)
+    }
+  }
+}
+watch(
+  pageTitle,
+  (title) => {
+    applyPageTitle(title)
+  },
+  { immediate: true }
+)
 const clampIndex = (index, length) => {
   if (!Number.isInteger(index)) return 0
   if (!Number.isInteger(length) || length <= 0) return 0
@@ -644,6 +670,14 @@ watch(
     reloadScene()
   },
   { flush: 'post' }
+)
+
+watch(
+  activeBraceletName,
+  (name) => {
+    pageTitle.value = name || DEFAULT_PAGE_TITLE
+  },
+  { immediate: true }
 )
 
 watch(
@@ -1461,6 +1495,20 @@ const handleAddMarble = async () => {
   justify-content: space-between;
   align-items: flex-start;
   gap: 16rpx;
+}
+
+.page-title-bar {
+  height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  font-size: 34rpx;
+  color: #111827;
+}
+
+.page-title-text {
+  text-align: center;
 }
 
 .price-block {
