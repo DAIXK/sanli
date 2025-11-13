@@ -1067,7 +1067,7 @@ const handleAddMarble = async () => {
   height: 0;
   border-left: 8rpx solid transparent;
   border-right: 8rpx solid transparent;
-  border-top: 10rpx solid #9ca3af;
+  border-top: 10rpx solid #111827;
   pointer-events: none;
 }
 
