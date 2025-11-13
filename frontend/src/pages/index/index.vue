@@ -599,8 +599,14 @@ const setRingOrientationBySize = (size) => {
 }
 const pointer = new THREE.Vector2()
 const LONG_PRESS_DURATION = 650
+const LONG_PRESS_MOVE_THRESHOLD = 12
 let longPressTimer = null
 let pendingMarble = null
+const longPressPointer = {
+  active: false,
+  x: 0,
+  y: 0
+}
 const raycaster = new THREE.Raycaster()
 let pointerTeardown = null
 
@@ -610,6 +616,7 @@ const cancelLongPressTimer = () => {
     longPressTimer = null
   }
   pendingMarble = null
+  longPressPointer.active = false
 }
 
 const pushUndoEntry = (entry) => {
@@ -963,10 +970,26 @@ const removeMarbleWithFeedback = (marble, options = {}) => {
   return true
 }
 
-const startLongPressTimer = (marble) => {
+const capturePointerOrigin = (event) => {
+  const source =
+    event?.touches?.[0] || event?.changedTouches?.[0] || event?.originalEvent?.touches?.[0] || event
+  const clientX = source?.clientX
+  const clientY = source?.clientY
+  if (typeof clientX === 'number' && typeof clientY === 'number') {
+    longPressPointer.active = true
+    longPressPointer.x = clientX
+    longPressPointer.y = clientY
+    return true
+  }
+  longPressPointer.active = false
+  return false
+}
+
+const startLongPressTimer = (marble, event) => {
   cancelLongPressTimer()
   pendingMarble = marble
   if (!marble) return
+  capturePointerOrigin(event)
   if (!Number.isFinite(LONG_PRESS_DURATION) || LONG_PRESS_DURATION <= 0) {
     removeMarbleWithFeedback(marble)
     pendingMarble = null
@@ -1020,8 +1043,21 @@ const bindPointerEvents = () => {
     }
     const marble = selectMarbleByPointer()
     if (marble) {
-      startLongPressTimer(marble)
+      startLongPressTimer(marble, event)
     } else {
+      cancelLongPressTimer()
+    }
+  }
+  const handlePointerMove = (event) => {
+    if (!longPressPointer.active) return
+    const source =
+      event?.touches?.[0] || event?.changedTouches?.[0] || event?.originalEvent?.touches?.[0] || event
+    const clientX = source?.clientX
+    const clientY = source?.clientY
+    if (typeof clientX !== 'number' || typeof clientY !== 'number') return
+    const deltaX = Math.abs(clientX - longPressPointer.x)
+    const deltaY = Math.abs(clientY - longPressPointer.y)
+    if (deltaX > LONG_PRESS_MOVE_THRESHOLD || deltaY > LONG_PRESS_MOVE_THRESHOLD) {
       cancelLongPressTimer()
     }
   }
@@ -1038,11 +1074,13 @@ const bindPointerEvents = () => {
     cancelLongPressTimer()
   }
   target.addEventListener('pointerdown', handlePointerDown)
+  target.addEventListener('pointermove', handlePointerMove)
   target.addEventListener('pointerup', handlePointerUp)
   target.addEventListener('pointerleave', handlePointerLeave)
   target.addEventListener('pointercancel', handlePointerCancel)
   pointerTeardown = () => {
     target.removeEventListener('pointerdown', handlePointerDown)
+    target.removeEventListener('pointermove', handlePointerMove)
     target.removeEventListener('pointerup', handlePointerUp)
     target.removeEventListener('pointerleave', handlePointerLeave)
     target.removeEventListener('pointercancel', handlePointerCancel)
