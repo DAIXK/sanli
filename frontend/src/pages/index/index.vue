@@ -313,6 +313,26 @@ const swipeState = {
   startY: 0,
   active: false
 }
+const viewerSwipeLock = {
+  active: false,
+  releaseTimer: null
+}
+const lockViewerSwipe = () => {
+  viewerSwipeLock.active = true
+  if (viewerSwipeLock.releaseTimer) {
+    clearTimeout(viewerSwipeLock.releaseTimer)
+    viewerSwipeLock.releaseTimer = null
+  }
+}
+const releaseViewerSwipe = (delay = 80) => {
+  if (viewerSwipeLock.releaseTimer) {
+    clearTimeout(viewerSwipeLock.releaseTimer)
+  }
+  viewerSwipeLock.releaseTimer = setTimeout(() => {
+    viewerSwipeLock.active = false
+    viewerSwipeLock.releaseTimer = null
+  }, delay)
+}
 const switchBracelet = (index) => {
   const list = braceletTypes.value
   if (!list.length) return
@@ -321,6 +341,10 @@ const switchBracelet = (index) => {
   selectedBraceletIndex.value = clamped
 }
 const handlePageTouchStart = (event) => {
+  if (viewerSwipeLock.active) {
+    swipeState.active = false
+    return
+  }
   const touch = event?.touches?.[0]
   if (!touch) return
   swipeState.startX = touch.clientX
@@ -328,6 +352,10 @@ const handlePageTouchStart = (event) => {
   swipeState.active = true
 }
 const handlePageTouchEnd = (event) => {
+  if (viewerSwipeLock.active) {
+    swipeState.active = false
+    return
+  }
   if (!swipeState.active) return
   const touch = event?.changedTouches?.[0]
   if (!touch) {
@@ -985,6 +1013,8 @@ const bindPointerEvents = () => {
   const handlePointerDown = (event) => {
     if (!sceneReady.value) return
     event.preventDefault?.()
+    event.stopPropagation?.()
+    lockViewerSwipe()
     if (!setPointerFromEvent(event)) {
       cancelLongPressTimer()
       return
@@ -996,9 +1026,18 @@ const bindPointerEvents = () => {
       cancelLongPressTimer()
     }
   }
-  const handlePointerUp = () => cancelLongPressTimer()
-  const handlePointerLeave = () => cancelLongPressTimer()
-  const handlePointerCancel = () => cancelLongPressTimer()
+  const handlePointerUp = () => {
+    releaseViewerSwipe()
+    cancelLongPressTimer()
+  }
+  const handlePointerLeave = () => {
+    releaseViewerSwipe()
+    cancelLongPressTimer()
+  }
+  const handlePointerCancel = () => {
+    releaseViewerSwipe()
+    cancelLongPressTimer()
+  }
   target.addEventListener('pointerdown', handlePointerDown)
   target.addEventListener('pointerup', handlePointerUp)
   target.addEventListener('pointerleave', handlePointerLeave)
@@ -1140,6 +1179,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   disposeScene()
+  if (viewerSwipeLock.releaseTimer) {
+    clearTimeout(viewerSwipeLock.releaseTimer)
+    viewerSwipeLock.releaseTimer = null
+  }
 })
 
 const loadMarbleTemplate = (glbPath) => {
