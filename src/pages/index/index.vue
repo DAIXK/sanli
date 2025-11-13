@@ -79,7 +79,16 @@
 </template>
 
 <script setup>
-import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import {
+  computed,
+  getCurrentInstance,
+  markRaw,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  toRaw
+} from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -177,11 +186,13 @@ const handleUndo = () => {
   }
   const entry = undoStack.value.pop()
   if (!entry) return
+  const record = typeof entry === 'object' ? toRaw(entry) : null
+  const marble = record?.marble ? toRaw(record.marble) : null
   let success = false
-  if (entry.type === 'add') {
-    success = removeMarble(entry.marble, { record: false })
-  } else if (entry.type === 'remove') {
-    success = restoreMarble(entry.marble, entry.index)
+  if (record?.type === 'add') {
+    success = marble ? removeMarble(marble, { record: false }) : false
+  } else if (record?.type === 'remove') {
+    success = marble ? restoreMarble(marble, record.index) : false
   }
   if (!success) {
     undoStack.value.push(entry)
@@ -319,7 +330,13 @@ const cancelLongPressTimer = () => {
 }
 
 const pushUndoEntry = (entry) => {
-  undoStack.value.push(entry)
+  if (!entry || typeof entry !== 'object') return
+  const normalized = { ...entry }
+  if (normalized.marble && typeof normalized.marble === 'object') {
+    const rawMarble = toRaw(normalized.marble)
+    normalized.marble = rawMarble ? markRaw(rawMarble) : rawMarble
+  }
+  undoStack.value.push(normalized)
 }
 
 const clearUndoHistory = () => {
@@ -1205,8 +1222,15 @@ const handleAddMarble = async () => {
 }
 
 .undo-button:disabled {
-  opacity: 0.4;
+  background: #e5e7eb;
+  border-color: rgba(0, 0, 0, 0.12);
+  opacity: 1;
   box-shadow: none;
+  cursor: not-allowed;
+}
+
+.undo-button:disabled .undo-icon {
+  color: #9ca3af;
 }
 
 .undo-icon {
