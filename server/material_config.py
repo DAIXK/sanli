@@ -7,15 +7,16 @@ MATERIAL_CONFIG = {
     "1": {
         "name": "桶珠手串",
         "background": [
-            {"glb": "/static/models/弹力绳.glb", "name": "桶珠手串", "length": 14},
-            {"glb": "/static/models/弹力绳.glb", "name": "桶珠手串", "length": 15},
-            {"glb": "/static/models/弹力绳.glb", "name": "桶珠手串", "length": 16},
-            {"glb": "/static/models/弹力绳.glb", "name": "桶珠手串", "length": 18},
-            {"glb": "/static/models/弹力绳.glb", "name": "桶珠手串", "length": 19},
+            {"glb": "/static/models/圈圈45.gltf", "name": "桶珠手串", "length": 14},
+            {"glb": "/static/models/圈圈47.gltf", "name": "桶珠手串", "length": 15},
+            {"glb": "/static/models/圈圈51.gltf", "name": "桶珠手串", "length": 16},
+            {"glb": "/static/models/圈圈54.gltf", "name": "桶珠手串", "length": 17},
+            {"glb": "/static/models/圈圈57.gltf", "name": "桶珠手串", "length": 18},
+            {"glb": "/static/models/圈圈60.gltf", "name": "桶珠手串", "length": 19},
         ],
         "product": [
             {
-                "glb": "/static/models/321.gltf",
+                "glb": "/static/models/321.glb",
                 "name": "磨砂珠",
                 "weight": "1",
                 "width": "6mm",
@@ -24,7 +25,7 @@ MATERIAL_CONFIG = {
                 "png": "/static/models/磨砂珠6mm.png",
             },
             {
-                "glb": "/static/models/321.gltf",
+                "glb": "/static/models/321.glb",
                 "name": "磨砂珠",
                 "weight": "1",
                 "width": "4mm",
@@ -109,15 +110,16 @@ MATERIAL_CONFIG = {
     "2": {
         "name": "药片石手串",
         "background": [
-            {"glb": "/static/models/弹力绳.glb", "name": "桶珠手串", "length": 14},
-            {"glb": "/static/models/弹力绳.glb", "name": "桶珠手串", "length": 15},
-            {"glb": "/static/models/弹力绳.glb", "name": "桶珠手串", "length": 16},
-            {"glb": "/static/models/弹力绳.glb", "name": "桶珠手串", "length": 18},
-            {"glb": "/static/models/弹力绳.glb", "name": "桶珠手串", "length": 19},
+            {"glb": "/static/models/圈圈45.gltf", "name": "桶珠手串", "length": 14},
+            {"glb": "/static/models/圈圈47.gltf", "name": "桶珠手串", "length": 15},
+            {"glb": "/static/models/圈圈51.gltf", "name": "桶珠手串", "length": 16},
+            {"glb": "/static/models/圈圈54.gltf", "name": "桶珠手串", "length": 17},
+            {"glb": "/static/models/圈圈57.gltf", "name": "桶珠手串", "length": 18},
+            {"glb": "/static/models/圈圈60.gltf", "name": "桶珠手串", "length": 19},
         ],
         "product": [
             {
-                "glb": "/static/models/321.gltf",
+                "glb": "/static/models/321.glb",
                 "name": "药片白玛瑙",
                 "weight": "1",
                 "width": "4mm",
@@ -126,7 +128,7 @@ MATERIAL_CONFIG = {
                 "png": "/static/models/药片白玛瑙.png",
             },
             {
-                "glb": "/static/models/321.gltf",
+                "glb": "/static/models/321.glb",
                 "name": "药片黑玛瑙",
                 "weight": "1",
                 "width": "4mm",
@@ -135,7 +137,7 @@ MATERIAL_CONFIG = {
                 "png": "/static/models/药片黑玛瑙.png",
             },
             {
-                "glb": "/static/models/321.gltf",
+                "glb": "/static/models/321.glb",
                 "name": "药片黑曜石",
                 "weight": "1",
                 "width": "4mm",
@@ -144,7 +146,7 @@ MATERIAL_CONFIG = {
                 "png": "/static/models/药片黑曜石.png",
             },
             {
-                "glb": "/static/models/321.gltf",
+                "glb": "/static/models/321.glb",
                 "name": "药片红玛瑙",
                 "weight": "1",
                 "width": "4mm",
@@ -153,7 +155,7 @@ MATERIAL_CONFIG = {
                 "png": "/static/models/药片红玛瑙.png",
             },
             {
-                "glb": "/static/models/321.gltf",
+                "glb": "/static/models/321.glb",
                 "name": "药片虎眼",
                 "weight": "1",
                 "width": "4mm",
@@ -162,7 +164,7 @@ MATERIAL_CONFIG = {
                 "png": "/static/models/药片虎眼.png",
             },
             {
-                "glb": "/static/models/321.gltf",
+                "glb": "/static/models/321.glb",
                 "name": "药片蓝玛瑙",
                 "weight": "1",
                 "width": "4mm",
@@ -171,7 +173,7 @@ MATERIAL_CONFIG = {
                 "png": "/static/models/药片蓝玛瑙.png",
             },
             {
-                "glb": "/static/models/321.gltf",
+                "glb": "/static/models/321.glb",
                 "name": "药片绿玛瑙",
                 "weight": "1",
                 "width": "4mm",

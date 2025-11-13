@@ -95,7 +95,6 @@
             />
           </view>
           <text class="product-name">{{ item.name }}</text>
-          <text class="product-width" v-if="item.width">{{ item.width }}</text>
         </view>
       </scroll-view>
     </view>
@@ -1705,7 +1704,7 @@ const handleAddMarble = async () => {
 
 .product-name {
   font-size: 24rpx;
-  color: #4b5563;
+  color: #9ca3af;
 }
 
 .product-width {
