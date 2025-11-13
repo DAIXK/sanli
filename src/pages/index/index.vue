@@ -1043,7 +1043,9 @@ const handleAddMarble = async () => {
 }
 
 .selector-control {
+  position: relative;
   display: inline-flex;
+  align-items: center;
 }
 
 .selector-value {
@@ -1052,8 +1054,21 @@ const handleAddMarble = async () => {
   border-radius: 12rpx;
   font-size: 26rpx;
   color: #1f2937;
-  min-width: 120rpx;
+  min-width: 100rpx;
+  padding-right: 23rpx;
   text-align: center;
+}
+
+.selector-control::after {
+  content: '';
+  position: absolute;
+  right: 18rpx;
+  width: 0;
+  height: 0;
+  border-left: 8rpx solid transparent;
+  border-right: 8rpx solid transparent;
+  border-top: 10rpx solid #9ca3af;
+  pointer-events: none;
 }
 
 .viewer-card {
