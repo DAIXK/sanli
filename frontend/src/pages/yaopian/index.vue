@@ -1,8 +1,8 @@
 <template>
   <BraceletPage
-    default-title="桶珠手串"
+    default-title="药片石手串"
     :load-config="loadConfig"
-    :swipe-routes="{ next: '/pages/yaopian/index' }"
+    :swipe-routes="{ prev: '/pages/index/index' }"
   />
 </template>
 
@@ -10,5 +10,5 @@
 import BraceletPage from '../../components/BraceletPage.vue'
 
 const loadConfig = () =>
-  import('../../materials/tongzhu').then((module) => module.default || module)
+  import('../../materials/yaopian').then((module) => module.default || module)
 </script>

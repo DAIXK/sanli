@@ -6,6 +6,13 @@
         "navigationStyle": "custom",
         "navigationBarTitleText": "桶珠手串"
       }
+    },
+    {
+      "path": "pages/yaopian/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "药片石手串"
+      }
     }
   ],
   "globalStyle": {
