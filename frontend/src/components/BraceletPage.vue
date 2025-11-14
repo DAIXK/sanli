@@ -1614,6 +1614,13 @@ const handleAddMarble = async () => {
   box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.05);
   margin-left: auto;
   margin-right: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.ghost-button::after {
+  content: none;
+  border: none;
 }
 
 .selector-row {
@@ -1726,26 +1733,37 @@ const handleAddMarble = async () => {
 .undo-container {
   display: flex;
   justify-content: flex-end;
-  padding: 16rpx 0;
+  padding: 20rpx 0 8rpx;
 }
 
 .undo-button {
-  border: none;
-  background: #ffffff;
-  border-radius: 24rpx;
-  padding: 0rpx 28rpx;
-  box-shadow: 0 8rpx 18rpx rgba(0, 0, 0, 0.08);
-  border: 2rpx solid rgba(0, 0, 0, 0.08);
   margin-right: 0;
+  width: 96rpx;
+  height: 96rpx;
+  padding: 0;
+  border: 2rpx solid rgba(59, 130, 246, 0.3);
+  outline: none;
+  border-radius: 25rpx;
+  background: linear-gradient(140deg, #ffffff 15%, #e8eeff 100%);
+  box-shadow:
+    0 12rpx 24rpx rgba(15, 23, 42, 0.15);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
 }
 
 .undo-button:disabled,
 .undo-button.is-disabled {
-  background: #e5e7eb;
-  border-color: rgba(0, 0, 0, 0.12);
-  opacity: 1;
+  background: linear-gradient(140deg, #f2f2f3 10%, #e0e3e8 100%);
   box-shadow: none;
-  cursor: not-allowed;
+  border-color: rgba(148, 163, 184, 0.6);
+}
+
+.undo-button::after {
+  content: none;
+  border: none;
 }
 
 .undo-button:disabled .undo-icon,
@@ -1754,8 +1772,9 @@ const handleAddMarble = async () => {
 }
 
 .undo-icon {
-  font-size: 32rpx;
-  color: #111827;
+  font-size: 40rpx;
+  color: #0f172a;
+  font-weight: 600;
 }
 
 .product-carousel {
