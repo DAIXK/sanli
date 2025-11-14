@@ -119,26 +119,190 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 //可按 “radial/tangent/normal” 三种轴向做世界坐标旋转
 
-
-const DEFAULT_API_BASE_URL = 'http://localhost:5001'
-let envApiBaseUrl = ''
-try {
-  envApiBaseUrl = import.meta.env?.VITE_API_BASE_URL || ''
-} catch (error) {
-  envApiBaseUrl = ''
-}
-const normalizeBaseUrl = (value) => {
-  if (typeof value !== 'string') return ''
-  return value.replace(/\/+$/, '')
-}
-const API_BASE_URL = normalizeBaseUrl(envApiBaseUrl || DEFAULT_API_BASE_URL)
-const MATERIAL_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/api/materials` : ''
-const isAbsoluteUrl = (value) => typeof value === 'string' && /^https?:\/\//i.test(value)
-const buildAssetUrl = (value) => {
-  if (typeof value !== 'string' || !value) return value
-  if (!API_BASE_URL || isAbsoluteUrl(value)) return value
-  const normalizedPath = value.startsWith('/') ? value : `/${value}`
-  return `${API_BASE_URL}${normalizedPath}`
+const RADIAL_ROTATION = (3 * Math.PI) / 2
+const NORMAL_ROTATION = Math.PI / 2
+const STATIC_MATERIAL_CONFIG = {
+  '1': {
+    price: '2288',
+    name: '桶珠手串',
+    background: [
+      { glb: '/static/models/圈圈45.gltf', name: '桶珠手串', length: 14 },
+      { glb: '/static/models/圈圈47.gltf', name: '桶珠手串', length: 15 },
+      { glb: '/static/models/圈圈51.gltf', name: '桶珠手串', length: 16 },
+      { glb: '/static/models/圈圈54.gltf', name: '桶珠手串', length: 17 },
+      { glb: '/static/models/圈圈57.gltf', name: '桶珠手串', length: 18 },
+      { glb: '/static/models/圈圈60.gltf', name: '桶珠手串', length: 19 }
+    ],
+    product: [
+      {
+        glb: '/static/models/321.glb',
+        name: '磨砂珠',
+        weight: '1',
+        width: '6mm',
+        rotation: RADIAL_ROTATION,
+        rotationAxis: 'radial',
+        png: '/static/models/磨砂珠6mm.png'
+      },
+      {
+        glb: '/static/models/321.glb',
+        name: '磨砂珠',
+        weight: '1',
+        width: '4mm',
+        rotation: RADIAL_ROTATION,
+        rotationAxis: 'radial',
+        png: '/static/models/磨砂珠4mm.png'
+      },
+      {
+        glb: '/static/models/绿玛瑙1.gltf',
+        name: '绿玛瑙',
+        weight: '2',
+        width: '6mm',
+        rotation: NORMAL_ROTATION,
+        rotationAxis: 'normal',
+        png: '/static/models/绿玛瑙1.png'
+      },
+      {
+        glb: '/static/models/绿玛瑙1.gltf',
+        name: '金曜石',
+        weight: '2',
+        width: '6mm',
+        rotation: NORMAL_ROTATION,
+        rotationAxis: 'normal',
+        png: '/static/models/金耀石.png'
+      },
+      {
+        glb: '/static/models/绿玛瑙1.gltf',
+        name: '红玛瑙',
+        weight: '2',
+        width: '6mm',
+        rotation: NORMAL_ROTATION,
+        rotationAxis: 'normal',
+        png: '/static/models/红玛瑙.png'
+      },
+      {
+        glb: '/static/models/绿玛瑙1.gltf',
+        name: '黑玛瑙',
+        weight: '2',
+        width: '6mm',
+        rotation: NORMAL_ROTATION,
+        rotationAxis: 'normal',
+        png: '/static/models/黑玛瑙.png'
+      },
+      {
+        glb: '/static/models/绿玛瑙1.gltf',
+        name: '绿玛瑙',
+        weight: '2',
+        width: '6mm',
+        rotation: NORMAL_ROTATION,
+        rotationAxis: 'normal',
+        png: '/static/models/绿玛瑙1.png'
+      },
+      {
+        glb: '/static/models/蓝玛瑙1.gltf',
+        name: '蓝玛瑙',
+        weight: '2',
+        width: '6mm',
+        rotation: NORMAL_ROTATION,
+        rotationAxis: 'normal',
+        png: '/static/models/蓝玛瑙.png'
+      },
+      {
+        glb: '/static/models/绿玛瑙1.gltf',
+        name: '虎眼珠',
+        weight: '2',
+        width: '6mm',
+        rotation: NORMAL_ROTATION,
+        rotationAxis: 'normal',
+        png: '/static/models/虎眼珠.png'
+      },
+      {
+        glb: '/static/models/绿玛瑙1.gltf',
+        name: '白玛瑙',
+        weight: '2',
+        width: '6mm',
+        rotation: NORMAL_ROTATION,
+        rotationAxis: 'normal',
+        png: '/static/models/白玛瑙.png'
+      }
+    ]
+  },
+  '2': {
+    price: '2188',
+    name: '药片石手串',
+    background: [
+      { glb: '/static/models/圈圈45.gltf', name: '桶珠手串', length: 14 },
+      { glb: '/static/models/圈圈47.gltf', name: '桶珠手串', length: 15 },
+      { glb: '/static/models/圈圈51.gltf', name: '桶珠手串', length: 16 },
+      { glb: '/static/models/圈圈54.gltf', name: '桶珠手串', length: 17 },
+      { glb: '/static/models/圈圈57.gltf', name: '桶珠手串', length: 18 },
+      { glb: '/static/models/圈圈60.gltf', name: '桶珠手串', length: 19 }
+    ],
+    product: [
+      {
+        glb: '/static/models/321.glb',
+        name: '药片白玛瑙',
+        weight: '1',
+        width: '4mm',
+        rotation: RADIAL_ROTATION,
+        rotationAxis: 'radial',
+        png: '/static/models/药片白玛瑙.png'
+      },
+      {
+        glb: '/static/models/321.glb',
+        name: '药片黑玛瑙',
+        weight: '1',
+        width: '4mm',
+        rotation: RADIAL_ROTATION,
+        rotationAxis: 'radial',
+        png: '/static/models/药片黑玛瑙.png'
+      },
+      {
+        glb: '/static/models/321.glb',
+        name: '药片黑曜石',
+        weight: '1',
+        width: '4mm',
+        rotation: RADIAL_ROTATION,
+        rotationAxis: 'radial',
+        png: '/static/models/药片黑曜石.png'
+      },
+      {
+        glb: '/static/models/321.glb',
+        name: '药片红玛瑙',
+        weight: '1',
+        width: '4mm',
+        rotation: RADIAL_ROTATION,
+        rotationAxis: 'radial',
+        png: '/static/models/药片红玛瑙.png'
+      },
+      {
+        glb: '/static/models/321.glb',
+        name: '药片虎眼',
+        weight: '1',
+        width: '4mm',
+        rotation: RADIAL_ROTATION,
+        rotationAxis: 'radial',
+        png: '/static/models/药片虎眼.png'
+      },
+      {
+        glb: '/static/models/321.glb',
+        name: '药片蓝玛瑙',
+        weight: '1',
+        width: '4mm',
+        rotation: RADIAL_ROTATION,
+        rotationAxis: 'radial',
+        png: '/static/models/药片蓝玛瑙.png'
+      },
+      {
+        glb: '/static/models/321.glb',
+        name: '药片绿玛瑙',
+        weight: '1',
+        width: '4mm',
+        rotation: RADIAL_ROTATION,
+        rotationAxis: 'radial',
+        png: '/static/models/药片绿玛瑙.png'
+      }
+    ]
+  }
 }
 const normalizeCollection = (collection) => (Array.isArray(collection) ? collection : [])
 const transformMaterialEntry = (entry = {}) => ({
@@ -146,13 +310,13 @@ const transformMaterialEntry = (entry = {}) => ({
   price: Number(entry.price) || 0,
   background: normalizeCollection(entry.background).map((item) => ({
     ...item,
-    glb: buildAssetUrl(item.glb),
-    png: buildAssetUrl(item.png)
+    glb: item.glb || '',
+    png: item.png || ''
   })),
   product: normalizeCollection(entry.product).map((item) => ({
     ...item,
-    glb: buildAssetUrl(item.glb),
-    png: buildAssetUrl(item.png)
+    glb: item.glb || '',
+    png: item.png || ''
   }))
 })
 const transformMaterialConfig = (config = {}) =>
@@ -179,6 +343,16 @@ const selectedBraceletIndex = ref(0)
 const selectedProductIndex = ref(0)
 const selectedRingSizeIndex = ref(0)
 const selectedBeadSizeIndex = ref(0)
+
+const applyMaterialConfig = (config) => {
+  const normalized = transformMaterialConfig(config)
+  materialConfig.value = normalized
+  selectedBraceletIndex.value = 0
+  selectedRingSizeIndex.value = 0
+  selectedBeadSizeIndex.value = 0
+  selectedProductIndex.value = 0
+}
+applyMaterialConfig(STATIC_MATERIAL_CONFIG)
 
 const activeBracelet = computed(() => {
   const list = braceletTypes.value
@@ -397,51 +571,6 @@ const handleGenerateVideo = () => {
 }
 const noop = () => {}
 
-const requestJson = (url) => {
-  if (!url) return Promise.reject(new Error('缺少请求地址'))
-  if (typeof uni !== 'undefined' && typeof uni.request === 'function') {
-    return new Promise((resolve, reject) => {
-      uni.request({
-        url,
-        method: 'GET',
-        success: (response) => resolve(response?.data),
-        fail: (error) => reject(error)
-      })
-    })
-  }
-  if (typeof fetch === 'function') {
-    return fetch(url).then((response) => {
-      if (!response.ok) {
-        throw new Error(`请求失败: ${response.status}`)
-      }
-      return response.json()
-    })
-  }
-  return Promise.reject(new Error('当前环境缺少网络请求能力'))
-}
-
-const fetchMaterialConfig = async () => {
-  if (!MATERIAL_ENDPOINT) return
-  try {
-    const data = await requestJson(MATERIAL_ENDPOINT)
-    if (data && typeof data === 'object') {
-      materialConfig.value = transformMaterialConfig(data)
-      selectedBraceletIndex.value = 0
-      selectedRingSizeIndex.value = 0
-      selectedBeadSizeIndex.value = 0
-      selectedProductIndex.value = 0
-    }
-  } catch (error) {
-    console.error('获取素材配置失败', error)
-    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
-      uni.showToast({
-        title: '素材数据加载失败',
-        icon: 'none'
-      })
-    }
-  }
-}
-
 const handleUndo = () => {
   if (!undoStack.value.length) {
     if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
@@ -543,7 +672,7 @@ const ringOrientation = {
   planeAxes: ['x', 'y'],
   normalAxis: 'z'
 }
-const DEFAULT_PAGE_TITLE = '3D 模型预览'
+const DEFAULT_PAGE_TITLE = '桶珠手串'
 const pageTitle = ref(DEFAULT_PAGE_TITLE)
 const showH5Title = isH5
 const applyPageTitle = (title) => {
@@ -1219,7 +1348,6 @@ const disposeScene = () => {
 }
 
 onMounted(async () => {
-  await fetchMaterialConfig()
   await nextTick()
   await initScene()
 })

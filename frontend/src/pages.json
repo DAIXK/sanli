@@ -3,13 +3,14 @@
     {
       "path": "pages/index/index",
       "style": {
-        "navigationStyle": "custom"
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "桶珠手串"
       }
     }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
-    "navigationBarTitleText": "3D 模型预览",
+    
     "navigationBarBackgroundColor": "#f8f9fb",
     "backgroundColor": "#f8f9fb"
   }

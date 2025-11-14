@@ -1,7 +1,7 @@
 {
   "name": "sanli 3d",
   "appid": "__UNI__SANLI3D001",
-  "description": "3D 模型预览 demo",
+  
   "versionName": "0.1.0",
   "versionCode": "100",
   "transformPx": true,

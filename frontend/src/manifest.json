@@ -1,7 +1,7 @@
 {
   "name": "sanli 3d",
   "appid": "__UNI__SANLI3D001",
-  "description": "3D 模型预览 demo",
+  "description": "桶珠手串",
   "versionName": "0.1.0",
   "versionCode": "100",
   "transformPx": true,
@@ -19,6 +19,13 @@
     "appid": "wx43e44c66d7275567",
     "setting": {
       "es6": true
+    },
+    "plugins": {
+      "ThreeX": {
+        "version": "3.2.1",
+        "provider": "wx5d6376b4fc730db9",
+        "export": "threex.js"
+      }
     },
     "optimization": {
       "subPackages": true
