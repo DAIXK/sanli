@@ -582,11 +582,11 @@ const ringOrientation = {
   planeAxes: ['x', 'y'],
   normalAxis: 'z'
 }
-const DEFAULT_PAGE_TITLE = props.defaultTitle || '定制手串'
-const pageTitle = ref(DEFAULT_PAGE_TITLE)
+const defaultPageTitle = computed(() => props.defaultTitle || '定制手串')
+const pageTitle = ref(defaultPageTitle.value)
 const showH5Title = isH5
 const applyPageTitle = (title) => {
-  const finalTitle = title || DEFAULT_PAGE_TITLE
+  const finalTitle = title || defaultPageTitle.value
   if (typeof document !== 'undefined') {
     document.title = finalTitle
   }
@@ -610,6 +610,13 @@ const clampIndex = (index, length) => {
   if (!Number.isInteger(length) || length <= 0) return 0
   return Math.min(Math.max(index, 0), length - 1)
 }
+watch(
+  defaultPageTitle,
+  (title) => {
+    pageTitle.value = title
+  },
+  { immediate: true }
+)
 
 const resetMarbles = () => {
   if (scene && marbleInstances.length) {
@@ -1418,7 +1425,7 @@ watch(
 watch(
   activeBraceletName,
   (name) => {
-    pageTitle.value = name || DEFAULT_PAGE_TITLE
+    pageTitle.value = name || defaultPageTitle.value
   },
   { immediate: true }
 )

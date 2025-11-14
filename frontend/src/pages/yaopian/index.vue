@@ -1,6 +1,6 @@
 <template>
   <BraceletPage
-    default-title="药片石手串"
+    default-title="药片珠手串"
     :load-config="loadConfig"
     :swipe-routes="{ prev: '/pages/index/index' }"
   />

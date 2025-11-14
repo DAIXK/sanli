@@ -3,14 +3,14 @@ const RADIAL_ROTATION = (3 * Math.PI) / 2
 export default {
   '2': {
     price: '2188',
-    name: '药片石手串',
+    name: '药片珠手串',
     background: [
-      { glb: '/static/models/圈圈45.gltf', name: '药片石手串', length: 14 },
-      { glb: '/static/models/圈圈47.gltf', name: '药片石手串', length: 15 },
-      { glb: '/static/models/圈圈51.gltf', name: '药片石手串', length: 16 },
-      { glb: '/static/models/圈圈54.gltf', name: '药片石手串', length: 17 },
-      { glb: '/static/models/圈圈57.gltf', name: '药片石手串', length: 18 },
-      { glb: '/static/models/圈圈60.gltf', name: '药片石手串', length: 19 }
+      { glb: '/static/models/圈圈45.gltf', name: '药片珠手串', length: 14 },
+      { glb: '/static/models/圈圈47.gltf', name: '药片珠手串', length: 15 },
+      { glb: '/static/models/圈圈51.gltf', name: '药片珠手串', length: 16 },
+      { glb: '/static/models/圈圈54.gltf', name: '药片珠手串', length: 17 },
+      { glb: '/static/models/圈圈57.gltf', name: '药片珠手串', length: 18 },
+      { glb: '/static/models/圈圈60.gltf', name: '药片珠手串', length: 19 }
     ],
     product: [
       {
