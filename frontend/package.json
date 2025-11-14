@@ -19,6 +19,7 @@
     "@dcloudio/types": "3.4.19",
     "@dcloudio/vite-plugin-uni": "npm:@dcloudio/vite-plugin-uni@vue3",
     "sass": "^1.77.6",
-    "vite": "5.2.8"
+    "vite": "5.2.8",
+    "vite-plugin-static-copy": "^3.1.4"
   }
 }

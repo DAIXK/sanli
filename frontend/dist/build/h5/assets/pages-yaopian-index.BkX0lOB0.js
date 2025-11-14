@@ -1,0 +1,1 @@
+import{c as e,o as a,_ as t}from"./index-B1KkDiGO.js";import{B as s}from"./BraceletPage.aR1wro3R.js";const o={__name:"index",setup(o){const i=()=>t(()=>import("./materials-yaopian.DXQkWeiv.js"),[]).then(e=>e.default||e);return(t,o)=>(a(),e(s,{"default-title":"药片珠手串","load-config":i,"swipe-routes":{prev:"/pages/index/index"}}))}};export{o as default};

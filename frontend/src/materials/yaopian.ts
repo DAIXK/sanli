@@ -14,7 +14,7 @@ export default {
     ],
     product: [
       {
-        glb: '/static/models/321.glb',
+        glb: '/static/models/白药片.gltf',
         name: '药片白玛瑙',
         weight: '1',
         width: '4mm',
@@ -23,7 +23,7 @@ export default {
         png: '/static/models/药片白玛瑙.png'
       },
       {
-        glb: '/static/models/321.glb',
+        glb: '/static/models/黑药片.gltf',
         name: '药片黑玛瑙',
         weight: '1',
         width: '4mm',
@@ -31,17 +31,9 @@ export default {
         rotationAxis: 'radial',
         png: '/static/models/药片黑玛瑙.png'
       },
+     
       {
-        glb: '/static/models/321.glb',
-        name: '药片黑曜石',
-        weight: '1',
-        width: '4mm',
-        rotation: RADIAL_ROTATION,
-        rotationAxis: 'radial',
-        png: '/static/models/药片黑曜石.png'
-      },
-      {
-        glb: '/static/models/321.glb',
+        glb: '/static/models/红药片.gltf',
         name: '药片红玛瑙',
         weight: '1',
         width: '4mm',
@@ -49,17 +41,9 @@ export default {
         rotationAxis: 'radial',
         png: '/static/models/药片红玛瑙.png'
       },
+      
       {
-        glb: '/static/models/321.glb',
-        name: '药片虎眼',
-        weight: '1',
-        width: '4mm',
-        rotation: RADIAL_ROTATION,
-        rotationAxis: 'radial',
-        png: '/static/models/药片虎眼.png'
-      },
-      {
-        glb: '/static/models/321.glb',
+        glb: '/static/models/蓝药片.gltf',
         name: '药片蓝玛瑙',
         weight: '1',
         width: '4mm',
@@ -68,7 +52,7 @@ export default {
         png: '/static/models/药片蓝玛瑙.png'
       },
       {
-        glb: '/static/models/321.glb',
+        glb: '/static/models/绿药片.gltf',
         name: '药片绿玛瑙',
         weight: '1',
         width: '4mm',

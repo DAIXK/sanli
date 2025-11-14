@@ -817,15 +817,15 @@ const startRenderLoop = () => {
 
 const addLights = () => {
   const hemiLight = new THREE.HemisphereLight(0xffffff, 0x1b1b1b, 1.2)
-  scene.add(hemiLight)
+  // scene.add(hemiLight)
 
   const dirLight = new THREE.DirectionalLight(0xffffff, 0.8)
   dirLight.position.set(5, 10, 7.5)
-  scene.add(dirLight)
+  // scene.add(dirLight)
 
   const fillLight = new THREE.PointLight(0x77aaff, 0.4)
   fillLight.position.set(-4, -2, -3)
-  scene.add(fillLight)
+  // scene.add(fillLight)
 }
 
 const loadModel = () => {
@@ -1182,7 +1182,7 @@ const initScene = async () => {
   adjustRendererSize()
   observeResize()
   bindPointerEvents()
-  addLights()
+  // addLights()
 
   controls = new OrbitControls(camera, renderer.domElement)
   controls.enableDamping = true
@@ -1607,7 +1607,7 @@ const handleAddMarble = async () => {
 .ghost-button {
   background: #fff;
   border-radius: 20rpx;
-  border: 1rpx solid rgba(0, 0, 0, 0.12);
+  border: 2rpx solid rgba(0, 0, 0, 0.12);
   // padding: 12rpx 32rpx;
   font-size: 26rpx;
   color: #111827;
@@ -1735,7 +1735,7 @@ const handleAddMarble = async () => {
   border-radius: 24rpx;
   padding: 0rpx 28rpx;
   box-shadow: 0 8rpx 18rpx rgba(0, 0, 0, 0.08);
-  border: 1rpx solid rgba(0, 0, 0, 0.08);
+  border: 2rpx solid rgba(0, 0, 0, 0.08);
   margin-right: 0;
 }
 
