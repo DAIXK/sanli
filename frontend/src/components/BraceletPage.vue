@@ -564,7 +564,7 @@ const ringConfig = {
   radius: 0.018,
   perRing: 28,
   depthStep: 0.0008,
-  layerGap: 0.0012,
+  layerGap: 0.00000000012,
   offsetZ: 0,
   bandThickness: 0
 }
@@ -1341,7 +1341,7 @@ const reflowMarbles = () => {
 
 const arcWidthFromDiameter = (diameter, radius) => {
   const safeDiameter = Math.max(diameter || 0.004, 0.0005)
-  const effectiveDiameter = safeDiameter * 1.02
+  const effectiveDiameter = safeDiameter * 1
   const ratio = Math.min(Math.max(effectiveDiameter / (2 * radius), 0), 1)
   return ratio > 0 ? 2 * Math.asin(ratio) : 0
 }
