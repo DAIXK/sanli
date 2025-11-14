@@ -1,8 +1,8 @@
 <template>
   <view class="page" @touchstart="handlePageTouchStart" @touchend="handlePageTouchEnd">
-    <view class="page-title-bar" v-if="showH5Title">
+    <!-- <view class="page-title-bar" v-if="showH5Title">
       <text class="page-title-text">{{ pageTitle }}</text>
-    </view>
+    </view> -->
     <view class="toolbar">
       <view class="price-block">
         <text class="price-text">¥ {{ formattedPrice }}</text>
