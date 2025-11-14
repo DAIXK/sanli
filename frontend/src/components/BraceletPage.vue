@@ -564,7 +564,7 @@ const ringConfig = {
   radius: 0.018,
   perRing: 28,
   depthStep: 0.0008,
-  layerGap: 0.00000000012,
+  layerGap: 0,
   offsetZ: 0,
   bandThickness: 0
 }
