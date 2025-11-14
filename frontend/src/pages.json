@@ -6,19 +6,18 @@
         "navigationStyle": "custom",
         "navigationBarTitleText": "桶珠手串"
       }
-    },
-    {
-      "path": "pages/yaopian/index",
-      "style": {
-        "navigationStyle": "custom",
-        "navigationBarTitleText": "药片珠手串"
-      }
     }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
-    
+    "navigationBarTitleText": "桶珠手串",
     "navigationBarBackgroundColor": "#f8f9fb",
     "backgroundColor": "#f8f9fb"
+  },
+  "h5": {
+    "router": {
+      "mode": "history",
+      "base": "/"
+    }
   }
 }

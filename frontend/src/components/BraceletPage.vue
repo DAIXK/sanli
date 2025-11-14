@@ -352,6 +352,41 @@ const viewerSwipeLock = {
   active: false,
   releaseTimer: null
 }
+
+const getH5RouterConfig = () => {
+  if (!isH5 || typeof window === 'undefined') return null
+  const router = window.__uniConfig?.router
+  if (!router || typeof router !== 'object') return null
+  const mode = router.mode === 'history' ? 'history' : 'hash'
+  const base =
+    typeof router.base === 'string' && router.base.trim()
+      ? router.base.trim()
+      : '/'
+  return { mode, base }
+}
+
+const isHistoryRouting = () => {
+  const config = getH5RouterConfig()
+  if (config) return config.mode === 'history'
+  if (typeof __UNI_FEATURE_ROUTER_MODE__ !== 'undefined') {
+    return String(__UNI_FEATURE_ROUTER_MODE__).replace(/"/g, '') === 'history'
+  }
+  return false
+}
+
+const buildHistoryUrl = (url) => {
+  const router = getH5RouterConfig()
+  const base = router?.base || '/'
+  const normalizedBase = base === '/' ? '' : base.replace(/\/+$/, '')
+  const sanitizedBase = normalizedBase
+    ? normalizedBase.startsWith('/')
+      ? normalizedBase
+      : `/${normalizedBase}`
+    : ''
+  const normalizedPath = url.startsWith('/') ? url : `/${url}`
+  return `${sanitizedBase}${normalizedPath}` || '/'
+}
+
 const formatRouteUrl = (url) => {
   if (typeof url !== 'string') return ''
   const trimmed = url.trim()
@@ -361,6 +396,9 @@ const formatRouteUrl = (url) => {
 const buildFallbackUrl = (url) => {
   if (!url) return ''
   if (!isH5) return url
+  if (isHistoryRouting()) {
+    return buildHistoryUrl(url)
+  }
   if (url.startsWith('/#') || url.startsWith('#')) return url
   if (url.startsWith('/')) return `/#${url}`
   return `/#/${url}`
