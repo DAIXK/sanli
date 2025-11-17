@@ -4,14 +4,14 @@ const NORMAL_ROTATION = Math.PI / 2
 export default {
   '1': {
     price: '2288',
-    name: '桶珠手串',
+    name: '7*8手串',
     background: [
-      { glb: '/static/models/圈圈45.gltf', name: '桶珠手串', length: 14 },
-      { glb: '/static/models/圈圈47.gltf', name: '桶珠手串', length: 15 },
-      { glb: '/static/models/圈圈51.gltf', name: '桶珠手串', length: 16 },
-      { glb: '/static/models/圈圈54.gltf', name: '桶珠手串', length: 17 },
-      { glb: '/static/models/圈圈57.gltf', name: '桶珠手串', length: 18 },
-      { glb: '/static/models/圈圈60.gltf', name: '桶珠手串', length: 19 }
+      { glb: '/static/models/圈圈45.gltf', name: '7*8手串', length: 14 },
+      { glb: '/static/models/圈圈47.gltf', name: '7*8手串', length: 15 },
+      { glb: '/static/models/圈圈51.gltf', name: '7*8手串', length: 16 },
+      { glb: '/static/models/圈圈54.gltf', name: '7*8手串', length: 17 },
+      { glb: '/static/models/圈圈57.gltf', name: '7*8手串', length: 18 },
+      { glb: '/static/models/圈圈60.gltf', name: '7*8手串', length: 19 }
     ],
     product: [
       {
@@ -23,15 +23,7 @@ export default {
         rotationAxis: 'radial',
         png: '/static/models/磨砂珠6mm.png'
       },
-      {
-        glb: '/static/models/磨砂珠4mm.gltf',
-        name: '磨砂珠',
-        weight: '1',
-        width: '4mm',
-        rotation: RADIAL_ROTATION,
-        rotationAxis: 'radial',
-        png: '/static/models/磨砂珠4mm.png'
-      },
+      
      
       
       {

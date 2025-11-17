@@ -4,13 +4,13 @@
       "path": "pages/index/index",
       "style": {
         "navigationStyle": "custom",
-        "navigationBarTitleText": "桶珠手串"
+        "navigationBarTitleText": "7*8手串"
       }
     }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
-    "navigationBarTitleText": "桶珠手串",
+    "navigationBarTitleText": "7*8手串",
     "navigationBarBackgroundColor": "#f8f9fb",
     "backgroundColor": "#f8f9fb"
   },

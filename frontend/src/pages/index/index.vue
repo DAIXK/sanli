@@ -1,6 +1,6 @@
 <template>
   <BraceletPage
-    default-title="桶珠手串"
+    default-title="7*8手串"
     :load-config="loadConfig"
   />
 </template>
