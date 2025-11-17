@@ -111,6 +111,15 @@
       <view class="carousel-fade right" v-if="productList.length > 1"></view>
       <text class="carousel-hint" v-if="productList.length > 2">滑动查看更多</text>
     </view>
+    <view class="onboarding-overlay" v-if="showOnboarding && currentOnboardingStep">
+      <view class="onboarding-bubble">
+        <text class="bubble-title">{{ currentOnboardingStep.title }}</text>
+        <text class="bubble-desc">{{ currentOnboardingStep.desc }}</text>
+        <button class="onboarding-button" @tap="handleOnboardingAction">
+          {{ onboardingActionText }}
+        </button>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -442,6 +451,37 @@ const swipeState = {
 const viewerSwipeLock = {
   active: false,
   releaseTimer: null
+}
+const onboardingSteps = [
+  {
+    title: '长按珠子可删除',
+    desc: '按住已添加的珠子约 3 秒，即可移除它'
+  },
+  {
+    title: '左右滑动空白区域',
+    desc: '在空白区域左右滑动可切换其他手串款式'
+  }
+]
+const showOnboarding = ref(false)
+const onboardingStep = ref(0)
+const currentOnboardingStep = computed(() => onboardingSteps[onboardingStep.value] || null)
+const onboardingActionText = computed(() =>
+  onboardingStep.value < onboardingSteps.length - 1 ? '下一步' : '我知道了'
+)
+const shouldShowOnboarding = () => true
+const recordOnboardingSeen = () => {}
+const dismissOnboarding = () => {
+  showOnboarding.value = false
+  recordOnboardingSeen()
+  onboardingStep.value = 0
+}
+const handleOnboardingAction = () => {
+  const nextStep = onboardingStep.value + 1
+  if (nextStep < onboardingSteps.length) {
+    onboardingStep.value = nextStep
+    return
+  }
+  dismissOnboarding()
 }
 
 const getMiniProgramBridge = () => {
@@ -1539,6 +1579,10 @@ onMounted(async () => {
   loadingText.value = '加载模型中...'
   await nextTick()
   await initScene()
+  if (shouldShowOnboarding()) {
+    onboardingStep.value = 0
+    showOnboarding.value = true
+  }
 })
 
 onBeforeUnmount(() => {
@@ -1770,6 +1814,9 @@ const handleAddMarble = async () => {
       })
     }
     return
+  }
+  if (showOnboarding.value) {
+    dismissOnboarding()
   }
   marbleLoading.value = true
   try {
@@ -2147,5 +2194,55 @@ const handleAddMarble = async () => {
   font-size: 22rpx;
   color: #9ca3af;
   letter-spacing: 4rpx;
+}
+
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  padding: 40rpx;
+  box-sizing: border-box;
+}
+
+.onboarding-bubble {
+  width: 100%;
+  max-width: 480rpx;
+  background: rgba(31, 41, 55, 0.95);
+  color: #f9fafb;
+  border-radius: 24rpx;
+  padding: 28rpx 32rpx;
+  box-shadow: 0 12rpx 40rpx rgba(15, 23, 42, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  text-align: center;
+}
+
+.bubble-title {
+  font-size: 24rpx;
+  color: rgba(199, 210, 254, 0.9);
+  letter-spacing: 3rpx;
+}
+
+.bubble-desc {
+  font-size: 26rpx;
+  color: rgba(243, 244, 246, 0.92);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.onboarding-button {
+  margin-top: 12rpx;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(249, 250, 251, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 20rpx;
+  font-size: 26rpx;
+  padding: 14rpx 24rpx;
 }
 </style>
