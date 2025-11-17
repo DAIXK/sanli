@@ -1,10 +1,29 @@
 <template>
-  <slot />
+  <view class="app-wrapper">
+    <slot />
+  </view>
 </template>
 
 <script setup></script>
 
 <style lang="scss">
+:global(html, body) {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+:global(#app) {
+  height: 100%;
+}
+
+.app-wrapper {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 page {
   min-height: 100%;
   background-color: #f8f9fb;

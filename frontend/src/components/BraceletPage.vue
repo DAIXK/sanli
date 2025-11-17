@@ -91,7 +91,7 @@
               v-if="item.png"
               class="product-thumb-image"
               :src="item.png"
-              mode="aspectFill"
+              mode="aspectFit"
             />
           </view>
           <text class="product-name">{{ item.name }}</text>
@@ -1858,7 +1858,7 @@ const handleAddMarble = async () => {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .product-name {

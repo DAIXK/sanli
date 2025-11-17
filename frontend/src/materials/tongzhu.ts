@@ -50,7 +50,7 @@ export default {
         width: '6mm',
         rotation: NORMAL_ROTATION,
         rotationAxis: 'radial',
-        png: '/static/models/药片黑玛瑙.png'
+        png: '/static/models/黑玛瑙.png'
       },
       {
         glb: '/static/models/绿玛瑙.gltf',
