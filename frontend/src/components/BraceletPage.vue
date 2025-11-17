@@ -8,7 +8,7 @@
         <text class="price-text">¥ {{ formattedPrice }}</text>
        
       </view>
-      <button class="ghost-button" disabled="true" @tap="handleGenerateVideo">生成视频</button>
+      <button class="ghost-button"  @tap="handleGenerateVideo">生成视频</button>
     </view>
 
 
@@ -315,6 +315,62 @@ const activeProductRotationAxis = computed(() => {
 
 const isH5 = typeof window !== 'undefined' && typeof document !== 'undefined'
 
+const loadWeixinJSSDK = (() => {
+  const JSSDK_URL = 'https://res.wx.qq.com/open/js/jweixin-1.6.0.js'
+  let scriptPromise = null
+  return () => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return Promise.resolve(null)
+    }
+    if (window.wx && window.wx.miniProgram) {
+      return Promise.resolve(window.wx)
+    }
+    if (scriptPromise) {
+      return scriptPromise
+    }
+    scriptPromise = new Promise((resolve, reject) => {
+      const selector = 'script[data-weixin-jssdk]'
+      const existing =
+        document.querySelector(selector) ||
+        document.querySelector(`script[src="${JSSDK_URL}"]`)
+      const handleLoad = (event) => {
+        event?.currentTarget?.setAttribute?.('data-weixin-loaded', 'true')
+        resolve(window.wx || null)
+      }
+      const handleError = (error) => {
+        scriptPromise = null
+        reject(error || new Error('微信 JS-SDK 加载失败'))
+      }
+      if (existing) {
+        const loaded =
+          existing.getAttribute('data-weixin-loaded') === 'true' ||
+          existing.readyState === 'complete'
+        if (loaded) {
+          resolve(window.wx || null)
+          return
+        }
+        existing.addEventListener('load', handleLoad, { once: true })
+        existing.addEventListener('error', handleError, { once: true })
+        return
+      }
+      const script = document.createElement('script')
+      script.src = JSSDK_URL
+      script.async = true
+      script.setAttribute('data-weixin-jssdk', 'true')
+      script.addEventListener('load', handleLoad, { once: true })
+      script.addEventListener('error', handleError, { once: true })
+      document.head.appendChild(script)
+    })
+    return scriptPromise
+  }
+})()
+
+if (isH5) {
+  loadWeixinJSSDK().catch((error) => {
+    console.warn('微信 JS-SDK 引入失败', error)
+  })
+}
+
 const canvasRef = ref(null)
 const loadingText = ref('加载模型中...')
 const marbleLoading = ref(false)
@@ -351,6 +407,47 @@ const swipeState = {
 const viewerSwipeLock = {
   active: false,
   releaseTimer: null
+}
+
+const getMiniProgramBridge = () => {
+  if (typeof window === 'undefined') return null
+  const bridge = window.wx?.miniProgram
+  uni.showToast({
+      title: bridge,
+      icon: 'none'
+    })
+  return bridge || null
+}
+
+const navigatedByMiniProgramBridge = (url) => {
+  if (!url) return false
+  const bridge = getMiniProgramBridge()
+  const targetUrl = typeof url === 'string' ? url : ''
+  if (!bridge || typeof bridge.navigateTo !== 'function') {
+    return false
+  }
+  try {
+    bridge.navigateTo({ url: targetUrl })
+    return true
+  } catch (error) {
+    console.warn('navigateTo mini program page failed', error)
+    return false
+  }
+}
+
+const sendMessageToMiniProgram = (message) => {
+  if (typeof window === 'undefined') return false
+  const bridge = getMiniProgramBridge()
+  if (!bridge || typeof bridge.postMessage !== 'function') {
+    return false
+  }
+  try {
+    bridge.postMessage({ data: message || {} })
+    return true
+  } catch (error) {
+    console.warn('postMessage to WeChat mini program failed', error)
+    return false
+  }
 }
 
 const getH5RouterConfig = () => {
@@ -509,14 +606,29 @@ const handlePageTouchEnd = (event) => {
   swipeState.active = false
 }
 const handleGenerateVideo = () => {
+  
+  const videoPageUrl = '/pages/video/index'
+  if (navigatedByMiniProgramBridge(videoPageUrl)) {
+    return
+  }
+  if (
+    sendMessageToMiniProgram({
+      action: 'navigateToVideo',
+      payload: { url: videoPageUrl }
+    })
+  ) {
+    return
+  }
+
   if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
     uni.showToast({
       title: '正在生成',
       icon: 'none'
     })
-  } else {
-    console.info('Generate video triggered')
+    return
   }
+
+  console.info('Generate video triggered')
 }
 const noop = () => {}
 
