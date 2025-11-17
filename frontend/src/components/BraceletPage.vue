@@ -8,7 +8,14 @@
         <text class="price-text">¥ {{ formattedPrice }}</text>
        
       </view>
-      <button class="ghost-button"  @tap="handleGenerateVideo">生成视频</button>
+      <button
+        class="ghost-button"
+        :class="{ 'is-disabled': !canGenerateVideo }"
+        :disabled="!canGenerateVideo"
+        @tap="handleGenerateVideo"
+      >
+        生成视频
+      </button>
     </view>
 
 
@@ -377,6 +384,7 @@ const marbleLoading = ref(false)
 const marbleCount = ref(0)
 const sceneReady = ref(false)
 const marbleLimit = ref(Infinity)
+const canGenerateVideo = computed(() => marbleCount.value > 0)
 const selectProduct = (index) => {
   const list = productList.value
   if (!Array.isArray(list) || !list.length) return
@@ -620,6 +628,15 @@ const handlePageTouchEnd = (event) => {
   swipeState.active = false
 }
 const handleGenerateVideo = () => {
+  if (!canGenerateVideo.value) {
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '请先添加珠子',
+        icon: 'none'
+      })
+    }
+    return
+  }
   const baseVideoPageUrl = '/pages/video/index'
   const detailPayload = {
     price: price.value,
