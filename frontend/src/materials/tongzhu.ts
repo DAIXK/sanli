@@ -3,7 +3,7 @@ const NORMAL_ROTATION = Math.PI / 2
 
 export default {
   '1': {
-    price: '2288',
+    price: '-',
     name: '7*8手串',
     background: [
       { glb: '/static/models/圈圈45.gltf', name: '7*8手串', length: 14 },
@@ -19,6 +19,8 @@ export default {
         name: '磨砂珠',
         weight: '1',
         width: '6mm',
+        price: '980',
+        type: 'gold',
         rotation: RADIAL_ROTATION,
         rotationAxis: 'radial',
         png: '/static/models/磨砂珠6mm.png'
@@ -31,6 +33,7 @@ export default {
         name: '红玛瑙',
         weight: '2',
         width: '6mm',
+        price: '20',
         rotation: NORMAL_ROTATION,
         rotationAxis: 'radial',
         png: '/static/models/红玛瑙.png'
@@ -40,6 +43,7 @@ export default {
         name: '黑玛瑙',
         weight: '2',
         width: '6mm',
+        price: '20',
         rotation: NORMAL_ROTATION,
         rotationAxis: 'radial',
         png: '/static/models/黑玛瑙.png'
@@ -49,6 +53,7 @@ export default {
         name: '绿玛瑙',
         weight: '2',
         width: '6mm',
+        price: '20',
         rotation: NORMAL_ROTATION,
         rotationAxis: 'radial',
         png: '/static/models/绿玛瑙.png'
@@ -58,6 +63,7 @@ export default {
         name: '蓝玛瑙',
         weight: '2',
         width: '6mm',
+        price: '20',
         rotation: NORMAL_ROTATION,
         rotationAxis: 'radial',
         png: '/static/models/蓝玛瑙.png'
@@ -68,6 +74,7 @@ export default {
         name: '白玛瑙',
         weight: '2',
         width: '6mm',
+        price: '20',
         rotation: NORMAL_ROTATION,
         rotationAxis: 'radial',
         png: '/static/models/白玛瑙.png'

@@ -2,7 +2,7 @@ const RADIAL_ROTATION = (3 * Math.PI) / 2
 
 export default {
   '2': {
-    price: '2188',
+    price: '22',
     name: '4*6手串',
     background: [
       { glb: '/static/models/圈圈45.gltf', name: '4*6手串', length: 14 },
@@ -18,6 +18,7 @@ export default {
         name: '药片白玛瑙',
         weight: '1',
         width: '4mm',
+        price: '20',
         rotation: RADIAL_ROTATION,
         rotationAxis: 'radial',
         png: '/static/models/药片白玛瑙.png'
@@ -27,6 +28,7 @@ export default {
         name: '药片黑玛瑙',
         weight: '1',
         width: '4mm',
+        price: '20',
         rotation: RADIAL_ROTATION,
         rotationAxis: 'radial',
         png: '/static/models/药片黑玛瑙.png'
@@ -37,6 +39,7 @@ export default {
         name: '药片红玛瑙',
         weight: '1',
         width: '4mm',
+        price: '20',
         rotation: RADIAL_ROTATION,
         rotationAxis: 'radial',
         png: '/static/models/药片红玛瑙.png'
@@ -47,6 +50,7 @@ export default {
         name: '药片蓝玛瑙',
         weight: '1',
         width: '4mm',
+        price: '20',
         rotation: RADIAL_ROTATION,
         rotationAxis: 'radial',
         png: '/static/models/药片蓝玛瑙.png'
@@ -56,6 +60,7 @@ export default {
         name: '药片绿玛瑙',
         weight: '1',
         width: '4mm',
+        price: '20',
         rotation: RADIAL_ROTATION,
         rotationAxis: 'radial',
         png: '/static/models/药片绿玛瑙.png'

@@ -6,7 +6,7 @@
     <view class="toolbar">
       <view class="price-block">
         <text class="price-text">¥ {{ formattedPrice }}</text>
-       
+        <text class="price-subtitle">{{ priceSubtitleText }}</text>
       </view>
       <button
         class="ghost-button"
@@ -73,7 +73,10 @@
         :disabled="!canUndo"
         @tap="handleUndo"
       >
-        <text class="undo-icon">↺</text>
+        <view class="undo-button-content">
+          <text class="undo-icon">↺</text>
+          <text class="undo-label">撤销</text>
+        </view>
       </button>
     </view>
 
@@ -164,7 +167,36 @@ const transformMaterialConfig = (config = {}) =>
   }, {})
 const materialConfig = ref({})
 const price = ref(0)
-const formattedPrice = computed(() => price.value.toLocaleString('zh-CN'))
+const accessoryPrice = ref(0)
+const goldWeight = ref(0)
+const formatCurrencyText = (value) => {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return '-'
+  }
+  return numeric.toLocaleString('zh-CN')
+}
+const formattedPrice = computed(() => formatCurrencyText(price.value))
+const formattedAccessoryPrice = computed(() => formatCurrencyText(accessoryPrice.value))
+const formatWeightText = (value) => {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) return ''
+  const rounded = Math.round(numeric * 100) / 100
+  const fixed = rounded.toFixed(2)
+  return fixed.replace(/\.?0+$/, '')
+}
+const formattedGoldWeight = computed(() => formatWeightText(goldWeight.value))
+const hasGoldWeightInfo = computed(() => {
+  const numeric = Number(goldWeight.value)
+  return Number.isFinite(numeric) && numeric > 0
+})
+const priceSubtitleText = computed(() => {
+  const base = `辅材珠¥${formattedAccessoryPrice.value}`
+  if (hasGoldWeightInfo.value) {
+    return `${base}，金约${formattedGoldWeight.value}克`
+  }
+  return base
+})
 
 const braceletTypes = computed(() => {
   const config = materialConfig.value || {}
@@ -221,14 +253,6 @@ const braceletProgress = computed(() => {
   return `${selectedBraceletIndex.value + 1}/${list.length}`
 })
 const backgroundOptions = computed(() => activeBracelet.value?.background ?? [])
-watch(
-  activeBracelet,
-  (bracelet) => {
-    const numericPrice = Number(bracelet?.price)
-    price.value = Number.isFinite(numericPrice) && numericPrice > 0 ? numericPrice : 0
-  },
-  { immediate: true }
-)
 const deriveRadius = (length, fallback) => {
   const numeric = Number(length)
   if (Number.isFinite(numeric) && numeric > 0) {
@@ -751,6 +775,47 @@ const updateGlobalBounds = ({ diameter, thickness }) => {
   }
 }
 const marbleInstances = []
+const normalizeNumeric = (value, fallback = 0) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+const isGoldProduct = (product) => {
+  const type = typeof product?.type === 'string' ? product.type.trim().toLowerCase() : ''
+  return type === 'gold'
+}
+const getProductUnitPrice = (product) => {
+  if (!product || typeof product !== 'object') return 0
+  const basePrice = normalizeNumeric(product.price, 0)
+  if (!basePrice || basePrice <= 0) return 0
+  if (isGoldProduct(product)) {
+    const weight = normalizeNumeric(product.weight, 1)
+    const normalizedWeight = Math.max(weight, 0)
+    return basePrice * (normalizedWeight || 0)
+  }
+  return basePrice
+}
+const buildBraceletCostSummary = () =>
+  marbleInstances.reduce(
+    (acc, marble) => {
+      const product = marble?.userData?.product
+      const unitPrice = getProductUnitPrice(product)
+      acc.total += unitPrice
+      if (isGoldProduct(product)) {
+        const weight = Math.max(normalizeNumeric(product?.weight, 0), 0)
+        acc.goldWeight += weight
+      } else {
+        acc.accessory += unitPrice
+      }
+      return acc
+    },
+    { total: 0, accessory: 0, goldWeight: 0 }
+  )
+const updateBraceletPrice = () => {
+  const summary = buildBraceletCostSummary()
+  price.value = summary.total > 0 ? summary.total : 0
+  accessoryPrice.value = summary.accessory > 0 ? summary.accessory : 0
+  goldWeight.value = summary.goldWeight > 0 ? summary.goldWeight : 0
+}
 const undoStack = ref([])
 const canUndo = computed(() => marbleCount.value > 0 && undoStack.value.length > 0)
 const ringConfig = {
@@ -818,6 +883,7 @@ const resetMarbles = () => {
   marbleInstances.length = 0
   marbleCount.value = 0
   marbleLimit.value = Infinity
+  updateBraceletPrice()
 }
 
 let reloadingScene = false
@@ -1182,6 +1248,7 @@ const restoreMarble = (marble, index = marbleInstances.length) => {
   marbleInstances.splice(clamped, 0, marble)
   marbleCount.value = marbleInstances.length
   marbleLimit.value = Infinity
+  updateBraceletPrice()
   reflowMarbles()
   return true
 }
@@ -1197,6 +1264,7 @@ const removeMarble = (marble, { record = true } = {}) => {
   marbleInstances.splice(index, 1)
   marbleCount.value = marbleInstances.length
   marbleLimit.value = Infinity
+  updateBraceletPrice()
   if (record) {
     pushUndoEntry({ type: 'remove', marble: target, index })
   }
@@ -1446,6 +1514,7 @@ const disposeScene = () => {
   productBounds.clear()
   marbleInstances.length = 0
   marbleCount.value = 0
+  updateBraceletPrice()
   sceneReady.value = false
   marbleLimit.value = Infinity
   ringMetrics.minRadius = Infinity
@@ -1732,6 +1801,7 @@ const handleAddMarble = async () => {
     marbleInstances.push(marble)
     marbleCount.value = marbleInstances.length
     marbleLimit.value = Infinity
+    updateBraceletPrice()
     pushUndoEntry({ type: 'add', marble })
     reflowMarbles()
   } catch (error) {
@@ -1809,6 +1879,12 @@ const handleAddMarble = async () => {
   margin-right: 0;
   position: relative;
   overflow: hidden;
+}
+
+.ghost-button.is-disabled {
+  opacity: 0.4;
+  color: #9ca3af;
+  border-color: rgba(0, 0, 0, 0.08);
 }
 
 .ghost-button::after {
@@ -1931,9 +2007,9 @@ const handleAddMarble = async () => {
 
 .undo-button {
   margin-right: 0;
-  width: 96rpx;
-  height: 96rpx;
-  padding: 0;
+  width: 110rpx;
+  min-height: 120rpx;
+  padding: 16rpx 0 12rpx;
   border: 2rpx solid rgba(59, 130, 246, 0.3);
   outline: none;
   border-radius: 25rpx;
@@ -1944,7 +2020,7 @@ const handleAddMarble = async () => {
   align-items: center;
   justify-content: center;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .undo-button:disabled,
@@ -1952,6 +2028,22 @@ const handleAddMarble = async () => {
   background: linear-gradient(140deg, #f2f2f3 10%, #e0e3e8 100%);
   box-shadow: none;
   border-color: rgba(148, 163, 184, 0.6);
+}
+
+.undo-button-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  line-height: 1;
+}
+
+.undo-label {
+  font-size: 20rpx;
+  color: #6b7280;
+  letter-spacing: 1rpx;
+  line-height: 1;
 }
 
 .undo-button::after {
