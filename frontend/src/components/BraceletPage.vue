@@ -412,10 +412,7 @@ const viewerSwipeLock = {
 const getMiniProgramBridge = () => {
   if (typeof window === 'undefined') return null
   const bridge = window.wx?.miniProgram
-  uni.showToast({
-      title: bridge,
-      icon: 'none'
-    })
+
   return bridge || null
 }
 
@@ -489,6 +486,23 @@ const formatRouteUrl = (url) => {
   const trimmed = url.trim()
   if (!trimmed) return ''
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+}
+const encodeMiniProgramPayload = (data) => {
+  if (!data || typeof data !== 'object') return ''
+  try {
+    return encodeURIComponent(JSON.stringify(data))
+  } catch (error) {
+    console.warn('encode mini program payload failed', error)
+    return ''
+  }
+}
+const buildMiniProgramUrl = (url, data) => {
+  const baseUrl = formatRouteUrl(url)
+  if (!baseUrl) return ''
+  const encoded = encodeMiniProgramPayload(data)
+  if (!encoded) return baseUrl
+  const separator = baseUrl.includes('?') ? '&' : '?'
+  return `${baseUrl}${separator}payload=${encoded}`
 }
 const buildFallbackUrl = (url) => {
   if (!url) return ''
@@ -606,29 +620,41 @@ const handlePageTouchEnd = (event) => {
   swipeState.active = false
 }
 const handleGenerateVideo = () => {
-  
-  const videoPageUrl = '/pages/video/index'
-  if (navigatedByMiniProgramBridge(videoPageUrl)) {
-    return
+  const baseVideoPageUrl = '/pages/video/index'
+  const detailPayload = {
+    price: price.value,
+    formattedPrice: formattedPrice.value,
+    ringSize: ringSizeLabels.value[selectedRingSizeIndex.value] || '',
+    beadSize: beadSizeLabels.value[selectedBeadSizeIndex.value] || '',
+    braceletId: activeBracelet.value?.id || '',
+    braceletName: activeBraceletName.value,
+    productName: activeProduct.value?.name || '',
+    productId: activeProduct.value?.id || '',
+    selectedProductIndex: selectedProductIndex.value,
+    marbleCount: marbleCount.value
   }
-  if (
-    sendMessageToMiniProgram({
-      action: 'navigateToVideo',
-      payload: { url: videoPageUrl }
-    })
-  ) {
+  const videoPageUrl = buildMiniProgramUrl(baseVideoPageUrl, detailPayload)
+  const message = {
+    action: 'navigateToVideo',
+    payload: { url: videoPageUrl },
+    ...detailPayload
+  }
+
+  sendMessageToMiniProgram(message)
+
+  if (navigatedByMiniProgramBridge(videoPageUrl)) {
     return
   }
 
   if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
     uni.showToast({
-      title: '正在生成',
+      title: '生成中，请稍候',
       icon: 'none'
     })
     return
   }
 
-  console.info('Generate video triggered')
+  console.info('Generate video triggered', message)
 }
 const noop = () => {}
 
