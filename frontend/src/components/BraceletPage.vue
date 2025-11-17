@@ -65,8 +65,14 @@
       </view>
     </view>
 
-    <view class="undo-container" v-if="productList.length">
+    <view class="undo-container" v-if="productList.length || showSwipeHint">
+      <view class="swipe-hint" v-if="showSwipeHint">
+        <text class="swipe-hint-arrow swipe-hint-arrow-left">←</text>
+        <text class="swipe-hint-text">空白处左右滑动可切换页面</text>
+        <text class="swipe-hint-arrow swipe-hint-arrow-right">→</text>
+      </view>
       <button
+        v-if="productList.length"
         class="undo-button"
         type="button"
         :class="{ 'is-disabled': !canUndo }"
@@ -478,6 +484,7 @@ const dismissOnboarding = () => {
   showOnboarding.value = false
   recordOnboardingSeen()
   onboardingStep.value = 0
+  handleSwipeHintAcknowledge()
 }
 const handleOnboardingAction = () => {
   const nextStep = onboardingStep.value + 1
@@ -565,6 +572,19 @@ const formatRouteUrl = (url) => {
   const trimmed = url.trim()
   if (!trimmed) return ''
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+}
+const swipeHintDismissed = ref(false)
+const hasSwipeRouteTargets = computed(() => {
+  const prev = formatRouteUrl(props.swipeRoutes?.prev || '')
+  const next = formatRouteUrl(props.swipeRoutes?.next || '')
+  return Boolean(prev || next)
+})
+const canSwipeBlankArea = computed(
+  () => hasSwipeRouteTargets.value || braceletTypes.value.length > 1
+)
+const showSwipeHint = computed(() => canSwipeBlankArea.value && !swipeHintDismissed.value)
+const handleSwipeHintAcknowledge = () => {
+  swipeHintDismissed.value = true
 }
 const encodeMiniProgramPayload = (data) => {
   if (!data || typeof data !== 'object') return ''
@@ -2055,8 +2075,11 @@ const handleAddMarble = async () => {
 
 .undo-container {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 20rpx;
   padding: 20rpx 0 8rpx;
+  flex-wrap: wrap;
 }
 
 .undo-button {
@@ -2075,6 +2098,77 @@ const handleAddMarble = async () => {
   justify-content: center;
   position: relative;
   overflow: visible;
+}
+
+.swipe-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 12rpx 26rpx;
+  border-radius: 999rpx;
+  background: rgba(15, 23, 42, 0.04);
+  color: #6b7280;
+  font-size: 24rpx;
+  pointer-events: none;
+  animation: swipe-hint-fade 0.3s ease;
+}
+
+.swipe-hint-text {
+  letter-spacing: 2rpx;
+}
+
+.swipe-hint-arrow {
+  font-size: 30rpx;
+  opacity: 0.85;
+}
+
+.swipe-hint-arrow-left {
+  animation: swipe-arrow-left 1.4s ease-in-out infinite;
+}
+
+.swipe-hint-arrow-right {
+  animation: swipe-arrow-right 1.4s ease-in-out infinite;
+}
+
+@keyframes swipe-arrow-left {
+  0% {
+    transform: translateX(0);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateX(-18rpx);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 0.35;
+  }
+}
+
+@keyframes swipe-arrow-right {
+  0% {
+    transform: translateX(0);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateX(18rpx);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 0.35;
+  }
+}
+
+@keyframes swipe-hint-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .undo-button:disabled,
