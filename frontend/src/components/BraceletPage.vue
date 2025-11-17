@@ -6,7 +6,7 @@
     <view class="toolbar">
       <view class="price-block">
         <text class="price-text">¥ {{ formattedPrice }}</text>
-        <text class="price-subtitle">{{ priceSubtitleText }}</text>
+        <text class="price-subtitle" v-if="priceSubtitleText">{{ priceSubtitleText }}</text>
       </view>
       <button
         class="ghost-button"
@@ -202,12 +202,16 @@ const hasGoldWeightInfo = computed(() => {
   const numeric = Number(goldWeight.value)
   return Number.isFinite(numeric) && numeric > 0
 })
+const hasAccessoryPrice = computed(() => Number(accessoryPrice.value) > 0)
 const priceSubtitleText = computed(() => {
-  const base = `辅材珠¥${formattedAccessoryPrice.value}`
-  if (hasGoldWeightInfo.value) {
-    return `${base}，金约${formattedGoldWeight.value}克`
+  const segments = []
+  if (hasAccessoryPrice.value) {
+    segments.push(`辅材珠¥${formattedAccessoryPrice.value}`)
   }
-  return base
+  if (hasGoldWeightInfo.value) {
+    segments.push(`金约${formattedGoldWeight.value}克`)
+  }
+  return segments.join('，')
 })
 
 const braceletTypes = computed(() => {
