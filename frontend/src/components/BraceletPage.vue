@@ -107,6 +107,9 @@
           <text class="product-name">{{ item.name }}</text>
         </view>
       </scroll-view>
+      <view class="carousel-fade left" v-if="productList.length > 1"></view>
+      <view class="carousel-fade right" v-if="productList.length > 1"></view>
+      <text class="carousel-hint" v-if="productList.length > 2">滑动查看更多</text>
     </view>
   </view>
 </template>
@@ -2067,6 +2070,7 @@ const handleAddMarble = async () => {
   border-radius: 32rpx;
   padding: 24rpx;
   box-shadow: none;
+  position: relative;
 }
 
 .product-scroll {
@@ -2116,5 +2120,32 @@ const handleAddMarble = async () => {
 .product-width {
   font-size: 22rpx;
   color: #9ca3af;
+}
+
+.carousel-fade {
+  position: absolute;
+  top: 24rpx;
+  bottom: 72rpx;
+  width: 60rpx;
+  pointer-events: none;
+}
+
+.carousel-fade.left {
+  left: 24rpx;
+  background: linear-gradient(90deg, #fff, rgba(255, 255, 255, 0));
+}
+
+.carousel-fade.right {
+  right: 24rpx;
+  background: linear-gradient(270deg, #fff, rgba(255, 255, 255, 0));
+}
+
+.carousel-hint {
+  display: block;
+  text-align: center;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: #9ca3af;
+  letter-spacing: 4rpx;
 }
 </style>
