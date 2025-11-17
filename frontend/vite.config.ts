@@ -12,6 +12,11 @@ export default defineConfig({
         {
           src: 'static/**/*',
           dest: 'static'
+        },
+        {
+          src: 'static/models/kNNXOz2HCs.txt',
+          dest: '.',
+          rename: 'kNNXOz2HCs.txt'
         }
       ]
     })
