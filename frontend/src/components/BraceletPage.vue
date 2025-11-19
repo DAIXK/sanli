@@ -33,15 +33,9 @@
     <view class="selector-row">
       <view class="selector-field">
         <text class="selector-label">圈长</text>
-        <picker
-          class="selector-control"
-          mode="selector"
-          :value="selectedRingSizeIndex"
-          :range="ringSizeLabels"
-          @change="handleRingSizeChange"
-        >
-          <view class="selector-value">{{ ringSizeLabels[selectedRingSizeIndex] }}</view>
-        </picker>
+        <view class="selector-control selector-control-static">
+          <view class="selector-value">{{ formattedRingLength }}</view>
+        </view>
       </view>
       <view class="selector-field">
         <text class="selector-label">珠径</text>
@@ -297,14 +291,12 @@ const braceletTypes = computed(() => {
 })
 const selectedBraceletIndex = ref(0)
 const selectedProductIndex = ref(0)
-const selectedRingSizeIndex = ref(0)
 const selectedBeadSizeIndex = ref(0)
 
 const applyMaterialConfig = (config) => {
   const normalized = transformMaterialConfig(config)
   materialConfig.value = normalized
   selectedBraceletIndex.value = 0
-  selectedRingSizeIndex.value = 0
   selectedBeadSizeIndex.value = 0
   selectedProductIndex.value = 0
 }
@@ -341,36 +333,40 @@ const braceletProgress = computed(() => {
   return `${selectedBraceletIndex.value + 1}/${list.length}`
 })
 const backgroundOptions = computed(() => activeBracelet.value?.background ?? [])
-const deriveRadius = (length, fallback) => {
+const lengthCmToRadius = (length) => {
   const numeric = Number(length)
-  if (Number.isFinite(numeric) && numeric > 0) {
-    return Math.max(numeric / 1000, MIN_RING_RADIUS)
+  if (!Number.isFinite(numeric) || numeric <= 0) return null
+  const meters = numeric / 100
+  return meters / (2 * Math.PI)
+}
+const deriveRadius = (length, fallback) => {
+  const converted = lengthCmToRadius(length)
+  if (Number.isFinite(converted) && converted > 0) {
+    return Math.max(converted, MIN_RING_RADIUS)
   }
   return Math.max(fallback || MIN_RING_RADIUS, MIN_RING_RADIUS)
 }
-const ringSizeOptions = computed(() =>
-  backgroundOptions.value.map((item, index) => {
-    const label =
-      typeof item.length !== 'undefined'
-        ? `${item.length}cm`
-        : item.name || `圈长${index + 1}`
-    const radius = Number(item.radius)
-    const fallbackRadius = deriveRadius(item.length, ringConfig.radius)
-    const normalizedRadius = Number.isFinite(radius) ? radius : fallbackRadius
-    const clampedRadius = Math.max(normalizedRadius, MIN_RING_RADIUS)
-    return {
-      label,
-      radius: clampedRadius,
-      glb: item.glb || '',
-      raw: item
-    }
-  })
-)
-const ringSizeLabels = computed(() => ringSizeOptions.value.map((item) => item.label))
-const activeRingOption = computed(
-  () => ringSizeOptions.value[selectedRingSizeIndex.value] || ringSizeOptions.value[0] || null
-)
-const modelUrl = computed(() => activeRingOption.value?.glb || '')
+const modelUrl = computed(() => {
+  const options = backgroundOptions.value
+  if (!options.length) return ''
+  const target = options[0]
+  return target?.glb || ''
+})
+
+const computedRingLengthCm = computed(() => {
+  layoutVersion.value
+  if (!marbleInstances.length) {
+    return MIN_RING_LENGTH
+  }
+  const totalDiameter = marbleInstances.reduce((sum, marble) => {
+    const diameter = getMarbleDiameter(marble)
+    return sum + (Number.isFinite(diameter) && diameter > 0 ? diameter : 0)
+  }, 0)
+  const cm = totalDiameter * 100
+  return Math.max(cm, MIN_RING_LENGTH)
+})
+
+const formattedRingLength = computed(() => `${computedRingLengthCm.value.toFixed(1)} cm`)
 
 const CANVAS_ID = 'modelCanvas'
 
@@ -498,6 +494,7 @@ const deleteZoneRef = ref(null)
 const loadingText = ref('加载模型中...')
 const marbleLoading = ref(false)
 const marbleCount = ref(0)
+const layoutVersion = ref(0)
 const sceneReady = ref(false)
 const marbleLimit = ref(Infinity)
 const canGenerateVideo = computed(() => marbleCount.value > 0)
@@ -515,11 +512,6 @@ const selectProduct = (index) => {
 const handleProductTap = async (index) => {
   selectProduct(index)
   await handleAddMarble()
-}
-const handleRingSizeChange = (event) => {
-  const idx = Number(event?.detail?.value)
-  if (Number.isNaN(idx)) return
-  selectedRingSizeIndex.value = idx
 }
 const handleBeadSizeChange = (event) => {
   const idx = Number(event?.detail?.value)
@@ -952,7 +944,7 @@ const handleGenerateVideo = () => {
   const detailPayload = {
     price: price.value,
     formattedPrice: formattedPrice.value,
-    ringSize: ringSizeLabels.value[selectedRingSizeIndex.value] || '',
+    ringSize: formattedRingLength.value,
     beadSize: beadSizeLabels.value[selectedBeadSizeIndex.value] || '',
     braceletId: activeBracelet.value?.id || '',
     braceletName: activeBraceletName.value,
@@ -1274,13 +1266,14 @@ const updateBraceletPrice = () => {
   goldWeight.value = summary.goldWeight > 0 ? summary.goldWeight : 0
 }
 const MIN_RING_LENGTH = 14 // cm
-const MIN_RING_RADIUS = MIN_RING_LENGTH / 1000
+const MIN_RING_RADIUS = (MIN_RING_LENGTH / 100) / (2 * Math.PI)
 const undoStack = ref([])
 const canUndo = computed(() => marbleCount.value > 0 && undoStack.value.length > 0)
+const defaultRingRadius = MIN_RING_RADIUS
 const ringConfig = {
-  radius: 0.018,
-  baseRadius: 0.018,
-  minRadius: 0.018,
+  radius: defaultRingRadius,
+  baseRadius: defaultRingRadius,
+  minRadius: defaultRingRadius,
   perRing: 28,
   depthStep: 0.0008,
   layerGap: 0,
@@ -2599,6 +2592,7 @@ const ensureRingRadiusFitsMarbles = () => {
 const refreshMarbleLayout = () => {
   ensureRingRadiusFitsMarbles()
   reflowMarbles()
+  layoutVersion.value++
 }
 
 function refreshMarblePlacement(marble) {
@@ -2622,15 +2616,6 @@ const arcWidthFromDiameter = (diameter, radius) => {
   const ratio = Math.min(Math.max(effectiveDiameter / (2 * radius), 0), 1)
   return ratio > 0 ? 2 * Math.asin(ratio) : 0
 }
-
-watch(
-  ringSizeOptions,
-  (options) => {
-    const nextIndex = clampIndex(selectedRingSizeIndex.value, options.length)
-    selectedRingSizeIndex.value = nextIndex
-  },
-  { immediate: true }
-)
 
 watch(
   beadSizeOptions,
@@ -2657,7 +2642,6 @@ watch(
   activeBracelet,
   () => {
     selectedProductIndex.value = 0
-    selectedRingSizeIndex.value = 0
     selectedBeadSizeIndex.value = 0
     resetMarbles()
     clearUndoHistory()
@@ -2677,14 +2661,23 @@ watch(
 )
 
 watch(
-  activeRingOption,
-  (option) => {
-    if (option?.radius && Number.isFinite(option.radius)) {
-      ringConfig.minRadius = Math.max(option.radius, 0.001)
-      ringConfig.baseRadius = ringConfig.minRadius
-      setRingRadius(option.radius)
+  backgroundOptions,
+  (options) => {
+    const target = options[0]
+    let nextRadius = ringConfig.radius
+    if (target?.radius && Number.isFinite(target.radius)) {
+      nextRadius = Math.max(target.radius, MIN_RING_RADIUS)
+    } else if (target?.length) {
+      nextRadius = deriveRadius(target.length, ringConfig.radius)
+    } else {
+      nextRadius = Math.max(nextRadius, MIN_RING_RADIUS)
     }
-    refreshMarbleLayout()
+    ringConfig.minRadius = Math.max(nextRadius, MIN_RING_RADIUS)
+    ringConfig.baseRadius = ringConfig.minRadius
+    setRingRadius(nextRadius)
+    if (sceneReady.value) {
+      refreshMarbleLayout()
+    }
   },
   { immediate: true }
 )
@@ -2960,6 +2953,15 @@ const handleAddMarble = async () => {
   border-right: 8rpx solid transparent;
   border-top: 10rpx solid #0e0f0f;
   pointer-events: none;
+}
+
+.selector-control-static {
+  cursor: default;
+}
+
+.selector-control-static::after {
+  content: none;
+  border: none;
 }
 
 .viewer-card {
