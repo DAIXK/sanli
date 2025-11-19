@@ -564,10 +564,6 @@ const onboardingSteps = [
   {
     title: '长按珠子可换位置',
     desc: '按住珠子 3 秒后可拖动到任意位置，或拖到底部删除'
-  },
-  {
-    title: '左右滑动空白区域',
-    desc: '在空白区域左右滑动可切换其他手串款式'
   }
 ]
 const showOnboarding = ref(false)
@@ -815,18 +811,6 @@ const formatRouteUrl = (url) => {
   const trimmed = url.trim()
   if (!trimmed) return ''
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`
-}
-const swipeHintDismissed = ref(false)
-const hasSwipeRouteTargets = computed(() => {
-  const prev = formatRouteUrl(props.swipeRoutes?.prev || '')
-  const next = formatRouteUrl(props.swipeRoutes?.next || '')
-  return Boolean(prev || next)
-})
-const canSwipeBlankArea = computed(
-  () => hasSwipeRouteTargets.value || braceletTypes.value.length > 1
-)
-const handleSwipeHintAcknowledge = () => {
-  swipeHintDismissed.value = true
 }
 const encodeMiniProgramPayload = (data) => {
   if (!data || typeof data !== 'object') return ''
