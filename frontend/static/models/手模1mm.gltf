@@ -1,0 +1,172 @@
+{
+  "asset": {
+    "generator": "Khronos glTF Blender I/O v4.5.49",
+    "version": "2.0"
+  },
+  "extensionsUsed": [
+    "KHR_materials_specular"
+  ],
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "mesh": 0,
+      "name": "gesturewomanneutrallow",
+      "rotation": [
+        0.7796340584754944,
+        -0.22995540499687195,
+        -0.09317316859960556,
+        0.57498699426651
+      ],
+      "scale": [
+        0.005000000353902578,
+        0.004999999422580004,
+        0.004999999888241291
+      ],
+      "translation": [
+        -0.09602325409650803,
+        0.12260297685861588,
+        0
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "doubleSided": true,
+      "extensions": {
+        "KHR_materials_specular": {
+          "specularFactor": 0
+        }
+      },
+      "name": "defaultMat",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.800000011920929,
+          0.800000011920929,
+          0.800000011920929,
+          1
+        ],
+        "metallicFactor": 0
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "gesturewomanneutrallow",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2,
+            "COLOR_0": 3,
+            "COLOR_1": 4
+          },
+          "indices": 5,
+          "material": 0
+        }
+      ]
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 4390,
+      "max": [
+        12.779082298278809,
+        11.105009078979492,
+        10.436761856079102
+      ],
+      "min": [
+        -12.651718139648438,
+        -13.867426872253418,
+        -34.2800178527832
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 4390,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 4390,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5121,
+      "count": 4390,
+      "normalized": true,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 4,
+      "componentType": 5123,
+      "count": 4390,
+      "normalized": true,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 5,
+      "componentType": 5123,
+      "count": 24246,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 52680,
+      "byteOffset": 0,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 52680,
+      "byteOffset": 52680,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 35120,
+      "byteOffset": 105360,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 17560,
+      "byteOffset": 140480,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 35120,
+      "byteOffset": 158040,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 48492,
+      "byteOffset": 193160,
+      "target": 34963
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "手模1mm_data.bin",
+      "byteLength": 241652
+    }
+  ]
+}

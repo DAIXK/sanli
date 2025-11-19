@@ -8,6 +8,7 @@
         <text class="price-text">¥ {{ formattedPrice }}</text>
         <text class="price-subtitle" v-if="priceSubtitleText">{{ priceSubtitleText }}</text>
       </view>
+      <view class="toolbar-actions">
       <button
         class="ghost-button"
         :class="{ 'is-disabled': !canGenerateVideo }"
@@ -16,6 +17,15 @@
       >
         生成视频
       </button>
+      <button
+        class="ghost-button ghost-button--secondary"
+        :class="{ 'is-disabled': !canGenerateVideo || animationRecording }"
+        :disabled="!canGenerateVideo || animationRecording"
+        @tap="handleGenerateAnimation"
+      >
+        {{ animationRecording ? '生成中...' : '生成动画' }}
+      </button>
+      </view>
     </view>
 
 
@@ -57,6 +67,14 @@
       <view class="loading" v-if="loadingText">
         <text>{{ loadingText }}</text>
       </view>
+      <view class="viewer-freeze-overlay" v-if="viewerFreezeVisible">
+        <image class="viewer-freeze-image" :src="viewerFreezeImage" mode="aspectFit" />
+      </view>
+    </view>
+    <view class="hand-preview-control">
+      <button class="hand-preview-button" @tap="handleHandPreviewToggle">
+        {{ handPreviewEnabled ? '隐藏手模' : '手模预览' }}
+      </button>
     </view>
 
     <view class="undo-container" v-if="productList.length || showSwipeHint">
@@ -156,6 +174,21 @@
           </view>
         </scroll-view>
         <button class="bead-guide-confirm" @tap="closeBeadGuideDrawer">我知道了</button>
+      </view>
+    </view>
+    <view class="animation-modal" v-if="animationModalVisible">
+      <view class="animation-mask" @tap="closeAnimationModal"></view>
+      <view class="animation-panel">
+        <text class="animation-title">生成动画预览</text>
+        <video
+          v-if="animationVideoUrl"
+          class="animation-video"
+          :src="animationVideoUrl"
+          controls
+          autoplay
+          loop
+        ></video>
+        <button class="animation-close" @tap="closeAnimationModal">关闭</button>
       </view>
     </view>
   </view>
@@ -311,9 +344,9 @@ const backgroundOptions = computed(() => activeBracelet.value?.background ?? [])
 const deriveRadius = (length, fallback) => {
   const numeric = Number(length)
   if (Number.isFinite(numeric) && numeric > 0) {
-    return numeric / 1000
+    return Math.max(numeric / 1000, MIN_RING_RADIUS)
   }
-  return fallback
+  return Math.max(fallback || MIN_RING_RADIUS, MIN_RING_RADIUS)
 }
 const ringSizeOptions = computed(() =>
   backgroundOptions.value.map((item, index) => {
@@ -322,9 +355,12 @@ const ringSizeOptions = computed(() =>
         ? `${item.length}cm`
         : item.name || `圈长${index + 1}`
     const radius = Number(item.radius)
+    const fallbackRadius = deriveRadius(item.length, ringConfig.radius)
+    const normalizedRadius = Number.isFinite(radius) ? radius : fallbackRadius
+    const clampedRadius = Math.max(normalizedRadius, MIN_RING_RADIUS)
     return {
       label,
-      radius: Number.isFinite(radius) ? radius : deriveRadius(item.length, ringConfig.radius),
+      radius: clampedRadius,
       glb: item.glb || '',
       raw: item
     }
@@ -500,6 +536,7 @@ const viewerSwipeLock = {
   active: false,
   releaseTimer: null
 }
+const sleep = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms))
 const onboardingSteps = [
   {
     title: '长按珠子可换位置',
@@ -553,6 +590,7 @@ const beadGuideSections = Object.freeze([
     ]
   }
 ])
+const HAND_MODEL_URL = '/static/models/手模1mm.gltf'
 const beadGuideDrawerVisible = ref(false)
 const beadGuideImageUrl = new URL('../../static/img/shou.jpg', import.meta.url).href
 const openBeadGuideDrawer = () => {
@@ -560,6 +598,121 @@ const openBeadGuideDrawer = () => {
 }
 const closeBeadGuideDrawer = () => {
   beadGuideDrawerVisible.value = false
+}
+const animationRecording = ref(false)
+const animationModalVisible = ref(false)
+const animationVideoUrl = ref('')
+const closeAnimationModal = () => {
+  animationModalVisible.value = false
+  if (animationVideoUrl.value) {
+    URL.revokeObjectURL(animationVideoUrl.value)
+    animationVideoUrl.value = ''
+  }
+}
+const viewerFreezeVisible = ref(false)
+const viewerFreezeImage = ref('')
+const showViewerFreeze = () => {
+  if (!canvasElement || typeof canvasElement.toDataURL !== 'function') {
+    viewerFreezeVisible.value = false
+    viewerFreezeImage.value = ''
+    return false
+  }
+  try {
+    const dataUrl = canvasElement.toDataURL('image/png')
+    if (dataUrl) {
+      viewerFreezeImage.value = dataUrl
+      viewerFreezeVisible.value = true
+      return true
+    }
+  } catch (error) {
+    console.warn('Capture viewer snapshot failed', error)
+  }
+  viewerFreezeVisible.value = false
+  viewerFreezeImage.value = ''
+  return false
+}
+const hideViewerFreeze = () => {
+  viewerFreezeVisible.value = false
+  viewerFreezeImage.value = ''
+}
+const handPreviewEnabled = ref(false)
+let handModel = null
+let handModelPromise = null
+const loadHandModel = () => {
+  if (handModel) return Promise.resolve(handModel)
+  if (handModelPromise) return handModelPromise
+  handModelPromise = new Promise((resolve, reject) => {
+    const loader = new GLTFLoader()
+    loader.load(
+      HAND_MODEL_URL,
+      (gltf) => {
+        const root = gltf.scene || gltf.scenes?.[0]
+        if (!root) {
+          reject(new Error('手模缺少可用场景'))
+          return
+        }
+        root.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true
+            child.receiveShadow = true
+          }
+        })
+        handModel = root
+        resolve(root)
+      },
+      undefined,
+      (error) => reject(error)
+    )
+  })
+  return handModelPromise
+}
+const attachHandModelToScene = async () => {
+  if (!handPreviewEnabled.value) return
+  if (!scene) return
+  try {
+    const model = await loadHandModel()
+    if (!scene) return
+    model.removeFromParent?.()
+    scene.add(model)
+    model.visible = true
+  } catch (error) {
+    console.warn('无法加载手模', error)
+  }
+}
+const detachHandModelFromScene = () => {
+  handModel?.removeFromParent?.()
+}
+const handleHandPreviewToggle = async () => {
+  if (!sceneReady.value || !scene) {
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '场景尚未准备好',
+        icon: 'none'
+      })
+    }
+    return
+  }
+  if (handPreviewEnabled.value) {
+    handPreviewEnabled.value = false
+    detachHandModelFromScene()
+    return
+  }
+  try {
+    const model = await loadHandModel()
+    if (!scene) return
+    model.removeFromParent?.()
+    scene.add(model)
+    model.visible = true
+    handPreviewEnabled.value = true
+  } catch (error) {
+    console.error('手模加载失败', error)
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '手模加载失败',
+        icon: 'none'
+      })
+    }
+  }
 }
 
 const getMiniProgramBridge = () => {
@@ -831,6 +984,130 @@ const handleGenerateVideo = () => {
 
   console.info('Generate video triggered', message)
 }
+
+const handleGenerateAnimation = async () => {
+  if (animationRecording.value) return
+  if (!canGenerateVideo.value || !marbleInstances.length) {
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '请先添加珠子',
+        icon: 'none'
+      })
+    } else {
+      console.info('Nothing to animate')
+    }
+    return
+  }
+  if (!isH5) {
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '仅支持 H5 录制',
+        icon: 'none'
+      })
+    }
+    return
+  }
+  const freezeShown = showViewerFreeze()
+  animationRecording.value = true
+  const marbles = marbleInstances.slice()
+  const previousVisibility = marbles.map((marble) => marble.visible !== false)
+  if (!canvasElement || typeof canvasElement.captureStream !== 'function') {
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '当前环境不支持录制',
+        icon: 'none'
+      })
+    } else {
+      console.warn('MediaRecorder not supported')
+    }
+    hideViewerFreeze()
+    animationRecording.value = false
+    return
+  }
+  try {
+    marbles.forEach((marble) => {
+      marble.visible = false
+    })
+    refreshMarbleLayout()
+    await nextTick()
+  } catch (error) {
+    console.warn('准备录制失败', error)
+  }
+  const stream = canvasElement.captureStream(30)
+  const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+    ? 'video/webm;codecs=vp9'
+    : 'video/webm'
+  const recorder = new MediaRecorder(stream, { mimeType })
+  const chunks = []
+  let recorderStopped = false
+  const stopRecorder = () => {
+    if (recorderStopped) return
+    recorderStopped = true
+    try {
+      recorder.stop()
+    } catch (error) {
+      console.warn('Failed to stop recorder', error)
+    }
+  }
+  const recordingPromise = new Promise((resolve, reject) => {
+    recorder.onerror = (event) => reject(event?.error || new Error('录制失败'))
+    recorder.ondataavailable = (event) => {
+      if (event.data?.size) {
+        chunks.push(event.data)
+      }
+    }
+    recorder.onstop = () => {
+      try {
+        const blob = new Blob(chunks, { type: 'video/webm' })
+        resolve(blob)
+      } catch (error) {
+        reject(error)
+      }
+    }
+  })
+  recorder.start()
+  try {
+    await sleep(300)
+    for (const marble of marbles) {
+      marble.visible = true
+      refreshMarbleLayout()
+      await sleep(360)
+    }
+    await sleep(600)
+    stopRecorder()
+    const blob = await recordingPromise
+    marbles.forEach((marble, index) => {
+      marble.visible = previousVisibility[index]
+    })
+    refreshMarbleLayout()
+    if (animationVideoUrl.value) {
+      URL.revokeObjectURL(animationVideoUrl.value)
+    }
+    animationVideoUrl.value = URL.createObjectURL(blob)
+    animationModalVisible.value = true
+  } catch (error) {
+    stopRecorder()
+    marbles.forEach((marble, index) => {
+      marble.visible = previousVisibility[index]
+    })
+    refreshMarbleLayout()
+    console.error('生成动画失败', error)
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '生成动画失败',
+        icon: 'none'
+      })
+    }
+  } finally {
+    stream.getTracks().forEach((track) => track.stop())
+    animationRecording.value = false
+    if (!freezeShown) {
+      hideViewerFreeze()
+    } else {
+      hideViewerFreeze()
+    }
+  }
+}
 const noop = () => {}
 
 const handleUndo = () => {
@@ -904,6 +1181,8 @@ let resizeTeardown = null
 let canvasElement = null
 let pmremGenerator = null
 let envTexture = null
+let ringRoot = null
+let ringRootBaseScale = null
 let orbitControlsLocked = false
 const disableOrbitControls = () => {
   if (orbitControlsLocked) return
@@ -931,6 +1210,7 @@ const DRAG_SCALE_MULTIPLIER = 1.12
 const DRAG_LIFT_DISTANCE = 0.004
 let dragIndicator = null
 let lastPointerIntersection = null
+const getRingInnerRoot = (root) => root?.userData?.ringInner || root
 const updateGlobalBounds = ({ diameter, thickness }) => {
   if (Number.isFinite(diameter) && diameter > 0) {
     marbleBounds.diameter = diameter
@@ -940,6 +1220,18 @@ const updateGlobalBounds = ({ diameter, thickness }) => {
   }
 }
 const marbleInstances = []
+let marbleInstanceCounter = 0
+const ensureMarbleInstanceId = (marble) => {
+  if (!marble || typeof marble !== 'object') return null
+  if (!marble.userData) {
+    marble.userData = {}
+  }
+  if (!marble.userData.instanceId) {
+    marbleInstanceCounter += 1
+    marble.userData.instanceId = marbleInstanceCounter
+  }
+  return marble.userData.instanceId
+}
 const normalizeNumeric = (value, fallback = 0) => {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : fallback
@@ -981,10 +1273,14 @@ const updateBraceletPrice = () => {
   accessoryPrice.value = summary.accessory > 0 ? summary.accessory : 0
   goldWeight.value = summary.goldWeight > 0 ? summary.goldWeight : 0
 }
+const MIN_RING_LENGTH = 14 // cm
+const MIN_RING_RADIUS = MIN_RING_LENGTH / 1000
 const undoStack = ref([])
 const canUndo = computed(() => marbleCount.value > 0 && undoStack.value.length > 0)
 const ringConfig = {
   radius: 0.018,
+  baseRadius: 0.018,
+  minRadius: 0.018,
   perRing: 28,
   depthStep: 0.0008,
   layerGap: 0,
@@ -1049,6 +1345,7 @@ const resetMarbles = () => {
   marbleCount.value = 0
   marbleLimit.value = Infinity
   updateBraceletPrice()
+  refreshMarbleLayout()
 }
 
 let reloadingScene = false
@@ -1282,6 +1579,12 @@ const loadModel = () => {
           reject(new Error('GLTF 中未找到可渲染的场景'))
           return
         }
+        const container = new THREE.Group()
+        container.name = 'RingWrapper'
+        container.add(root)
+        container.userData.ringInner = root
+        ringRoot = container
+        ringRootBaseScale = container.scale.clone()
         root.traverse((child) => {
           if (child.isMesh) {
             child.castShadow = true
@@ -1293,8 +1596,8 @@ const loadModel = () => {
             }
           }
         })
-        scene.add(root)
-        resolve(root)
+        scene.add(container)
+        resolve(container)
       },
       undefined,
       (error) => reject(error)
@@ -1304,15 +1607,16 @@ const loadModel = () => {
 
 const fitCameraToModel = (root) => {
   if (!root || !camera || !controls) return
-  const boundingBox = new THREE.Box3().setFromObject(root)
+  const actualRoot = getRingInnerRoot(root)
+  const boundingBox = new THREE.Box3().setFromObject(actualRoot)
   if (boundingBox.isEmpty()) return
 
   const size = boundingBox.getSize(new THREE.Vector3())
   const center = boundingBox.getCenter(new THREE.Vector3())
 
-  root.position.sub(center)
+  actualRoot.position.sub(center)
   setRingOrientationBySize(size)
-  updateRingMetrics(root)
+  updateRingMetrics(actualRoot)
 
   if (!Number.isFinite(ringConfig.radius) || ringConfig.radius <= 0) {
     const fallbackRadius = Math.max(size.x, size.y, size.z) / 2
@@ -1344,6 +1648,12 @@ const fitCameraToModel = (root) => {
   controls.minDistance = distance * 0.35
   controls.maxDistance = distance * 6
   controls.update()
+  ringConfig.baseRadius = ringConfig.radius
+  ringConfig.minRadius = Math.max(ringConfig.radius, MIN_RING_RADIUS)
+  if (ringRoot) {
+    ringRoot.scale.set(1, 1, 1)
+    ringRootBaseScale = ringRoot.scale.clone()
+  }
 }
 
 const createGLContext = () => {
@@ -1422,13 +1732,16 @@ const resolveMarbleFromObject = (object) => {
 
 const restoreMarble = (marble, index = marbleInstances.length) => {
   if (!scene || !marble) return false
+  marble.userData = marble.userData || {}
+  marble.userData.isMarbleRoot = true
+  ensureMarbleInstanceId(marble)
   const clamped = Math.min(Math.max(index, 0), marbleInstances.length)
   scene.add(marble)
   marbleInstances.splice(clamped, 0, marble)
   marbleCount.value = marbleInstances.length
   marbleLimit.value = Infinity
   updateBraceletPrice()
-  reflowMarbles()
+  refreshMarbleLayout()
   return true
 }
 
@@ -1447,7 +1760,7 @@ const removeMarble = (marble, { record = true } = {}) => {
   if (record) {
     pushUndoEntry({ type: 'remove', marble: target, index })
   }
-  reflowMarbles()
+  refreshMarbleLayout()
   return true
 }
 
@@ -1548,13 +1861,10 @@ const getMarbleDiameter = (marble) =>
 
 const getBraceletRadius = () => Math.max(ringConfig.radius, 0.001)
 
-const computeBraceletArcUsage = () => {
-  const radius = getBraceletRadius()
+const computeBraceletArcUsage = (radius = getBraceletRadius()) => {
+  const safeRadius = Math.max(radius, 0.001)
   return marbleInstances.reduce((arc, marble) => {
-    const width =
-      typeof marble?.userData?.arcWidth === 'number'
-        ? marble.userData.arcWidth
-        : arcWidthFromDiameter(getMarbleDiameter(marble), radius)
+    const width = arcWidthFromDiameter(getMarbleDiameter(marble), safeRadius)
     return arc + width
   }, 0)
 }
@@ -1580,17 +1890,6 @@ const buildPlacementFromArc = (startAngle, arcWidth, diameter) => {
     endAngle: startAngle + arcWidth,
     arcWidth
   }
-}
-
-const computeNewMarblePlacement = (diameter) => {
-  const radius = getBraceletRadius()
-  const arcWidth = arcWidthFromDiameter(diameter, radius)
-  const usedArc = computeBraceletArcUsage()
-  const maxArc = Math.PI * 2
-  if (usedArc + arcWidth > maxArc) {
-    return null
-  }
-  return buildPlacementFromArc(usedArc, arcWidth, diameter)
 }
 
 const getPointerRingIntersection = () => {
@@ -1783,7 +2082,7 @@ const swapMarbleOrder = (first, second) => {
     marbleInstances[indexB],
     marbleInstances[indexA]
   ]
-  reflowMarbles()
+  refreshMarbleLayout()
   return { swapped: true, indexA, indexB }
 }
 
@@ -1805,7 +2104,7 @@ const moveMarbleToIndex = (marble, targetIndex) => {
     insertIndex = boundedTarget - 1
   }
   marbleInstances.splice(insertIndex, 0, removed)
-  reflowMarbles()
+  refreshMarbleLayout()
   return { moved: true, fromIndex, toIndex: insertIndex }
 }
 
@@ -2026,7 +2325,7 @@ const initScene = async () => {
 
   pmremGenerator = new THREE.PMREMGenerator(renderer)
   pmremGenerator.compileEquirectangularShader()
-  envTexture = pmremGenerator.fromScene(new RoomEnvironment(renderer), 0.04).texture
+  envTexture = pmremGenerator.fromScene(new RoomEnvironment(renderer), 0.01).texture
 
   scene.environment = envTexture
 
@@ -2048,6 +2347,9 @@ const initScene = async () => {
     fitCameraToModel(root)
     loadingText.value = ''
     sceneReady.value = true
+    if (handPreviewEnabled.value) {
+      attachHandModelToScene()
+    }
   } catch (error) {
     console.error('模型加载失败', error)
     loadingText.value = '模型加载失败，请确认文件是否存在'
@@ -2080,6 +2382,10 @@ const disposeScene = () => {
   if (scene && marbleInstances.length) {
     marbleInstances.forEach((item) => scene.remove(item))
   }
+  ringRoot = null
+  ringRootBaseScale = null
+  ringConfig.baseRadius = ringConfig.minRadius = 0
+  detachHandModelFromScene()
   controls?.dispose?.()
   renderer?.dispose?.()
   scene?.traverse?.((child) => {
@@ -2147,6 +2453,9 @@ onBeforeUnmount(() => {
   if (viewerSwipeLock.releaseTimer) {
     clearTimeout(viewerSwipeLock.releaseTimer)
     viewerSwipeLock.releaseTimer = null
+  }
+  if (animationVideoUrl.value) {
+    URL.revokeObjectURL(animationVideoUrl.value)
   }
 })
 
@@ -2228,6 +2537,70 @@ const reflowMarbles = () => {
   })
 }
 
+const setRingRadius = (radius) => {
+  if (!Number.isFinite(radius)) return
+  const minRadius = Math.max(
+    ringConfig.minRadius || ringConfig.baseRadius || MIN_RING_RADIUS,
+    MIN_RING_RADIUS
+  )
+  const baseRadius = Math.max(ringConfig.baseRadius || minRadius, minRadius)
+  const target = Math.max(radius, minRadius)
+  if (Math.abs(target - ringConfig.radius) < 1e-6) return
+  ringConfig.radius = target
+  if (ringRoot) {
+    const scaleFactor = baseRadius > 0 ? target / baseRadius : 1
+    const baseScale = ringRootBaseScale || ringRoot.scale || new THREE.Vector3(1, 1, 1)
+    ringRoot.scale.set(
+      baseScale.x * scaleFactor,
+      baseScale.y * scaleFactor,
+      baseScale.z * scaleFactor
+    )
+  }
+}
+
+const ensureRingRadiusFitsMarbles = () => {
+  const minRadius = Math.max(ringConfig.minRadius || ringConfig.baseRadius || 0.001, 0.001)
+  if (!marbleInstances.length) {
+    setRingRadius(minRadius)
+    return ringConfig.radius
+  }
+  const targetArc = Math.PI * 2 - 1e-4
+  let low = minRadius
+  let high = Math.max(getBraceletRadius(), minRadius)
+  let usageLow = computeBraceletArcUsage(low)
+  if (usageLow <= targetArc) {
+    setRingRadius(low)
+    return ringConfig.radius
+  }
+  let usageHigh = computeBraceletArcUsage(high)
+  let iter = 0
+  while (usageHigh > targetArc && iter < 40) {
+    low = high
+    high *= 1.25
+    usageHigh = computeBraceletArcUsage(high)
+    iter++
+    if (!Number.isFinite(high) || high > 10) {
+      break
+    }
+  }
+  for (let i = 0; i < 40; i++) {
+    const mid = (low + high) / 2
+    const usage = computeBraceletArcUsage(mid)
+    if (usage > targetArc) {
+      low = mid
+    } else {
+      high = mid
+    }
+  }
+  setRingRadius(high)
+  return ringConfig.radius
+}
+
+const refreshMarbleLayout = () => {
+  ensureRingRadiusFitsMarbles()
+  reflowMarbles()
+}
+
 function refreshMarblePlacement(marble) {
   if (!marble) return
   const diameter = getMarbleDiameter(marble)
@@ -2307,9 +2680,11 @@ watch(
   activeRingOption,
   (option) => {
     if (option?.radius && Number.isFinite(option.radius)) {
-      ringConfig.radius = option.radius
+      ringConfig.minRadius = Math.max(option.radius, 0.001)
+      ringConfig.baseRadius = ringConfig.minRadius
+      setRingRadius(option.radius)
     }
-    reflowMarbles()
+    refreshMarbleLayout()
   },
   { immediate: true }
 )
@@ -2320,7 +2695,7 @@ watch(
     const diameter = option?.diameter || 0.004
     marbleBounds.diameter = diameter
     marbleBounds.thickness = diameter
-    reflowMarbles()
+    refreshMarbleLayout()
   },
   { immediate: true }
 )
@@ -2396,7 +2771,6 @@ const handleAddMarble = async () => {
       }
     const marble = template.clone(true)
     marble.traverse((node) => {
-      node.userData.marbleRoot = marble
       node.userData.product = activeProduct.value
       node.userData.bounds = bounds
     })
@@ -2405,29 +2779,20 @@ const handleAddMarble = async () => {
     if (bounds) {
       updateGlobalBounds(bounds)
     }
-    const diameterForPlacement = bounds?.diameter || marbleBounds.diameter || 0.004
-    const placement = computeNewMarblePlacement(diameterForPlacement)
-    if (!placement) {
-      marbleLimit.value = marbleCount.value
-      throw new Error('弹珠数量超出一圈容量')
-    }
     const rotationConfig = {
       rotation: activeProductRotation.value,
       axis: activeProductRotationAxis.value
     }
     marble.userData.rotationConfig = rotationConfig
-    marble.userData.currentAngle = placement.angle
-    marble.userData.arcStart = placement.startAngle
-    marble.userData.arcEnd = placement.endAngle
-    marble.userData.arcWidth = placement.arcWidth
-    orientMarble(marble, placement.position, rotationConfig)
+    marble.userData.isMarbleRoot = true
+    ensureMarbleInstanceId(marble)
     scene.add(marble)
     marbleInstances.push(marble)
     marbleCount.value = marbleInstances.length
     marbleLimit.value = Infinity
     updateBraceletPrice()
     pushUndoEntry({ type: 'add', marble })
-    reflowMarbles()
+    refreshMarbleLayout()
   } catch (error) {
     console.error('添加珠子失败', error)
     if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
@@ -2491,6 +2856,12 @@ const handleAddMarble = async () => {
   color: #9ca3af;
 }
 
+.toolbar-actions {
+  display: flex;
+  gap: 12rpx;
+  align-items: center;
+}
+
 .ghost-button {
   background: #fff;
   border-radius: 20rpx;
@@ -2499,10 +2870,21 @@ const handleAddMarble = async () => {
   font-size: 26rpx;
   color: #111827;
   box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.05);
-  margin-left: auto;
-  margin-right: 0;
   position: relative;
   overflow: hidden;
+}
+
+.ghost-button--secondary {
+  border-color: rgba(99, 102, 241, 0.4);
+  color: #4c1d95;
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.ghost-button--secondary.is-disabled {
+  opacity: 0.4;
+  color: #9ca3af;
+  border-color: rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.02);
 }
 
 .ghost-button.is-disabled {
@@ -2621,6 +3003,41 @@ const handleAddMarble = async () => {
   justify-content: center;
   font-size: 28rpx;
   color: #4b5563;
+}
+
+.viewer-freeze-overlay {
+  position: absolute;
+  inset: 24rpx;
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.98);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.viewer-freeze-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 24rpx;
+  object-fit: contain;
+}
+
+.hand-preview-control {
+  display: flex;
+  justify-content: center;
+  margin-top: -6rpx;
+  margin-bottom: 6rpx;
+}
+
+.hand-preview-button {
+  border: none;
+  background: #f3f4f6;
+  color: #111827;
+  border-radius: 999rpx;
+  padding: 16rpx 40rpx;
+  font-size: 24rpx;
 }
 
 .undo-container {
@@ -2956,7 +3373,7 @@ const handleAddMarble = async () => {
 
 .bead-guide-panel {
   width: 100%;
-  max-height: 70vh;
+  max-height: 90vh;
   border-top-left-radius: 36rpx;
   border-top-right-radius: 36rpx;
   background: #fff;
@@ -3059,6 +3476,56 @@ const handleAddMarble = async () => {
   background: #111827;
   color: #fff;
   border-radius: 999rpx;
+  font-size: 28rpx;
+  padding: 20rpx 0;
+}
+
+.animation-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 960;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.animation-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.animation-panel {
+  position: relative;
+  z-index: 961;
+  width: calc(100% - 80rpx);
+  max-width: 640rpx;
+  background: #fff;
+  border-radius: 28rpx;
+  padding: 32rpx 28rpx 36rpx;
+  box-shadow: 0 18rpx 40rpx rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.animation-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #111827;
+}
+
+.animation-video {
+  width: 100%;
+  border-radius: 24rpx;
+  background: #000;
+}
+
+.animation-close {
+  border: none;
+  border-radius: 999rpx;
+  background: #111827;
+  color: #fff;
   font-size: 28rpx;
   padding: 20rpx 0;
 }
