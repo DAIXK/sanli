@@ -138,6 +138,7 @@
             <text class="bead-guide-close-icon">✕</text>
           </button>
         </view>
+        <image class="bead-guide-illustration" :src="beadGuideImageUrl" mode="widthFix" />
         <scroll-view scroll-y class="bead-guide-content">
           <view
             class="bead-guide-section"
@@ -553,6 +554,7 @@ const beadGuideSections = Object.freeze([
   }
 ])
 const beadGuideDrawerVisible = ref(false)
+const beadGuideImageUrl = new URL('../../static/img/shou.jpg', import.meta.url).href
 const openBeadGuideDrawer = () => {
   beadGuideDrawerVisible.value = true
 }
@@ -3012,6 +3014,18 @@ const handleAddMarble = async () => {
 
 .bead-guide-content {
   flex: 1;
+  margin-top: 12rpx;
+}
+
+.bead-guide-illustration {
+  width: 35%;
+  height: auto;
+  min-height: 180rpx;
+  display: block;
+  border-radius: 24rpx;
+  margin-top: 4rpx;
+  box-shadow: 0 10rpx 30rpx rgba(15, 23, 42, 0.12);
+  object-fit: contain;
 }
 
 .bead-guide-section {
