@@ -126,6 +126,14 @@
         </button>
       </view>
     </view>
+    <view
+      class="delete-zone"
+      :class="{ 'is-visible': deleteZone.visible, 'is-hovered': deleteZone.hovered }"
+      ref="deleteZoneRef"
+    >
+      <text class="delete-zone-icon">✕</text>
+      <text class="delete-zone-text">{{ deleteZone.hovered ? '松手删除' : '拖到这里删除' }}</text>
+    </view>
   </view>
 </template>
 
@@ -137,6 +145,7 @@ import {
   nextTick,
   onBeforeUnmount,
   onMounted,
+  reactive,
   ref,
   toRaw,
   watch
@@ -425,12 +434,17 @@ if (isH5) {
 }
 
 const canvasRef = ref(null)
+const deleteZoneRef = ref(null)
 const loadingText = ref('加载模型中...')
 const marbleLoading = ref(false)
 const marbleCount = ref(0)
 const sceneReady = ref(false)
 const marbleLimit = ref(Infinity)
 const canGenerateVideo = computed(() => marbleCount.value > 0)
+const deleteZone = reactive({
+  visible: false,
+  hovered: false
+})
 const selectProduct = (index) => {
   const list = productList.value
   if (!Array.isArray(list) || !list.length) return
@@ -465,7 +479,7 @@ const viewerSwipeLock = {
 const onboardingSteps = [
   {
     title: '长按珠子可换位置',
-    desc: '按住珠子 3 秒后可拖动，与其他珠子交换或扔到空隙做首尾'
+    desc: '按住珠子 3 秒后可拖动，与珠子互换、扔空隙做首尾，或拖到底部删除'
   },
   {
     title: '左右滑动空白区域',
@@ -1025,6 +1039,14 @@ const pointerPlaneOrigin = new THREE.Vector3()
 const pointerHitPoint = new THREE.Vector3()
 const pointerRelative = new THREE.Vector3()
 let pointerTeardown = null
+const extractPointerClientPosition = (event) => {
+  const source =
+    event?.touches?.[0] || event?.changedTouches?.[0] || event?.originalEvent?.touches?.[0] || event
+  const clientX = source?.clientX
+  const clientY = source?.clientY
+  if (typeof clientX !== 'number' || typeof clientY !== 'number') return null
+  return { clientX, clientY }
+}
 
 const cancelLongPressTimer = () => {
   if (longPressTimer) {
@@ -1381,7 +1403,18 @@ const reorderState = {
   marble: null,
   target: null,
   sourceIndex: -1,
-  insertIndex: -1
+  insertIndex: -1,
+  deleteIntent: false
+}
+
+const showDeleteZoneOverlay = () => {
+  deleteZone.visible = true
+  deleteZone.hovered = false
+}
+
+const hideDeleteZoneOverlay = () => {
+  deleteZone.visible = false
+  deleteZone.hovered = false
 }
 
 const ensureMarbleBaseScale = (marble) => {
@@ -1571,6 +1604,42 @@ const computePointerInsertionIndex = () => {
   return determineEdgeInsertionIndex(angle)
 }
 
+const getDeleteZoneElement = () => {
+  const element = deleteZoneRef.value
+  if (!element) return null
+  return element.$el ?? element
+}
+
+const isPointerInsideDeleteZone = (event) => {
+  if (!deleteZone.visible) return false
+  const element = getDeleteZoneElement()
+  if (!element || typeof element.getBoundingClientRect !== 'function') {
+    return false
+  }
+  const rect = element.getBoundingClientRect()
+  const position = extractPointerClientPosition(event)
+  if (!position) return false
+  const { clientX, clientY } = position
+  return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom
+}
+
+const updateDeleteZoneHoverState = (event) => {
+  if (!reorderState.active || !deleteZone.visible) {
+    deleteZone.hovered = false
+    reorderState.deleteIntent = false
+    return false
+  }
+  const hovered = isPointerInsideDeleteZone(event)
+  deleteZone.hovered = hovered
+  reorderState.deleteIntent = hovered
+  if (hovered) {
+    reorderState.target = null
+    reorderState.insertIndex = -1
+  }
+  refreshDragIndicator()
+  return hovered
+}
+
 const resetReorderState = () => {
   if (reorderState.marble) {
     setMarbleDragVisualState(reorderState.marble, false)
@@ -1580,8 +1649,10 @@ const resetReorderState = () => {
   reorderState.target = null
   reorderState.sourceIndex = -1
   reorderState.insertIndex = -1
+  reorderState.deleteIntent = false
   enableOrbitControls()
   hideDragIndicator()
+  hideDeleteZoneOverlay()
 }
 
 const beginMarbleSwapSession = (marble) => {
@@ -1593,12 +1664,14 @@ const beginMarbleSwapSession = (marble) => {
   reorderState.target = null
   reorderState.sourceIndex = index
   reorderState.insertIndex = -1
+  reorderState.deleteIntent = false
   disableOrbitControls()
+  showDeleteZoneOverlay()
   setMarbleDragVisualState(marble, true)
   longPressPointer.active = false
   if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
     uni.showToast({
-      title: '拖到珠子交换，拖到空隙可改首尾',
+      title: '拖到珠子交换/空隙改首尾/底部删除',
       icon: 'none'
     })
   } else {
@@ -1608,6 +1681,10 @@ const beginMarbleSwapSession = (marble) => {
 
 const updateReorderTargetFromPointer = () => {
   if (!reorderState.active) return null
+  if (reorderState.deleteIntent) {
+    refreshDragIndicator()
+    return null
+  }
   const hovered = selectMarbleByPointer()
   reorderState.target = hovered && hovered !== reorderState.marble ? hovered : null
   if (reorderState.target) {
@@ -1699,15 +1776,32 @@ const completeMarbleSwap = () => {
   return true
 }
 
+const completeMarbleDeletion = () => {
+  if (!reorderState.active) return false
+  const source = reorderState.marble
+  const sourceIndex = reorderState.sourceIndex
+  resetReorderState()
+  if (!source) return false
+  const removed = removeMarble(source, { record: false })
+  if (!removed) return false
+  pushUndoEntry({ type: 'remove', marble: source, index: sourceIndex })
+  if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+    uni.showToast({
+      title: '已删除该珠子',
+      icon: 'none'
+    })
+  } else {
+    console.info('Selected marble deleted')
+  }
+  return true
+}
+
 const capturePointerOrigin = (event) => {
-  const source =
-    event?.touches?.[0] || event?.changedTouches?.[0] || event?.originalEvent?.touches?.[0] || event
-  const clientX = source?.clientX
-  const clientY = source?.clientY
-  if (typeof clientX === 'number' && typeof clientY === 'number') {
+  const position = extractPointerClientPosition(event)
+  if (position) {
     longPressPointer.active = true
-    longPressPointer.x = clientX
-    longPressPointer.y = clientY
+    longPressPointer.x = position.clientX
+    longPressPointer.y = position.clientY
     return true
   }
   longPressPointer.active = false
@@ -1748,13 +1842,10 @@ const selectMarbleByPointer = () => {
 const setPointerFromEvent = (event) => {
   if (!canvasElement || !canvasElement.getBoundingClientRect) return false
   const rect = canvasElement.getBoundingClientRect()
-  const source =
-    event.touches?.[0] || event.changedTouches?.[0] || event.originalEvent?.touches?.[0] || event
-  const clientX = source?.clientX
-  const clientY = source?.clientY
-  if (typeof clientX !== 'number' || typeof clientY !== 'number') return false
-  pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1
-  pointer.y = -(((clientY - rect.top) / rect.height) * 2 - 1)
+  const position = extractPointerClientPosition(event)
+  if (!position) return false
+  pointer.x = ((position.clientX - rect.left) / rect.width) * 2 - 1
+  pointer.y = -(((position.clientY - rect.top) / rect.height) * 2 - 1)
   return true
 }
 
@@ -1781,7 +1872,10 @@ const bindPointerEvents = () => {
   const handlePointerMove = (event) => {
     if (reorderState.active) {
       if (setPointerFromEvent(event)) {
-        updateReorderTargetFromPointer()
+        const hoveringDelete = updateDeleteZoneHoverState(event)
+        if (!hoveringDelete) {
+          updateReorderTargetFromPointer()
+        }
       }
       return
     }
@@ -1800,9 +1894,17 @@ const bindPointerEvents = () => {
   const handlePointerUp = (event) => {
     releaseViewerSwipe()
     if (reorderState.active) {
-      setPointerFromEvent(event)
-      updateReorderTargetFromPointer()
-      completeMarbleSwap()
+      if (setPointerFromEvent(event)) {
+        const hoveringDelete = updateDeleteZoneHoverState(event)
+        if (hoveringDelete) {
+          completeMarbleDeletion()
+        } else {
+          updateReorderTargetFromPointer()
+          completeMarbleSwap()
+        }
+      } else {
+        completeMarbleSwap()
+      }
     }
     cancelLongPressTimer()
     cancelMarbleSwapSession()
@@ -2731,5 +2833,46 @@ const handleAddMarble = async () => {
   border-radius: 20rpx;
   font-size: 26rpx;
   padding: 14rpx 24rpx;
+}
+
+.delete-zone {
+  position: fixed;
+  left: 50%;
+  bottom: 80rpx;
+  transform: translate(-50%, 120%);
+  opacity: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 18rpx 32rpx;
+  border-radius: 999rpx;
+  background: rgba(239, 68, 68, 0.08);
+  color: #b91c1c;
+  font-weight: 500;
+  transition: opacity 0.25s ease, transform 0.25s ease, background 0.2s ease, color 0.2s ease;
+  z-index: 120;
+  box-shadow: 0 4rpx 18rpx rgba(0, 0, 0, 0.08);
+}
+
+.delete-zone.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.delete-zone.is-hovered {
+  background: rgba(239, 68, 68, 0.2);
+  color: #7f1d1d;
+  box-shadow: 0 12rpx 32rpx rgba(239, 68, 68, 0.4);
+}
+
+.delete-zone-icon {
+  font-size: 32rpx;
+  line-height: 1;
+}
+
+.delete-zone-text {
+  font-size: 26rpx;
+  letter-spacing: 2rpx;
 }
 </style>
