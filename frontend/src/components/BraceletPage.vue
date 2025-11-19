@@ -3,6 +3,17 @@
     <!-- <view class="page-title-bar" v-if="showH5Title">
       <text class="page-title-text">{{ pageTitle }}</text>
     </view> -->
+    <view class="bracelet-tabs" v-if="braceletTypes.length > 1">
+      <view
+        v-for="(item, index) in braceletTypes"
+        :key="item.id || index"
+        class="bracelet-tab"
+        :class="{ active: selectedBraceletIndex === index }"
+        @tap="switchBracelet(index)"
+      >
+        <text>{{ item.name || `款式${index + 1}` }}</text>
+      </view>
+    </view>
     <view class="toolbar">
       <view class="price-block">
         <text class="price-text">¥ {{ formattedPrice }}</text>
@@ -2884,6 +2895,29 @@ const handleAddMarble = async () => {
 .price-subtitle {
   font-size: 24rpx;
   color: #9ca3af;
+}
+
+.bracelet-tabs {
+  display: flex;
+  gap: 16rpx;
+  padding-bottom: 12rpx;
+}
+
+.bracelet-tab {
+  flex: 1;
+  padding: 16rpx 0;
+  text-align: center;
+  border-radius: 15rpx;
+  border: 2rpx solid rgba(99, 102, 241, 0.25);
+  color: #6b7280;
+  font-size: 24rpx;
+}
+
+.bracelet-tab.active {
+  background: rgba(99, 102, 241, 0.1);
+  color: #1f2937;
+  font-weight: 600;
+  border-color: rgba(99, 102, 241, 0.6);
 }
 
 .toolbar-actions {
