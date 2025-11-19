@@ -35,15 +35,9 @@
       </view>
       <view class="selector-field">
         <text class="selector-label">珠径</text>
-        <picker
-          class="selector-control"
-          mode="selector"
-          :value="selectedBeadSizeIndex"
-          :range="beadSizeLabels"
-          @change="handleBeadSizeChange"
-        >
+        <view class="selector-control bead-guide-trigger" @tap="openBeadGuideDrawer">
           <view class="selector-value">{{ beadSizeLabels[selectedBeadSizeIndex] }}</view>
-        </picker>
+        </view>
       </view>
     </view>
 
@@ -133,6 +127,35 @@
     >
       <text class="delete-zone-icon">✕</text>
       <text class="delete-zone-text">{{ deleteZone.hovered ? '松手删除' : '拖到这里删除' }}</text>
+    </view>
+    <view class="bead-guide-overlay" v-if="beadGuideDrawerVisible">
+      <view class="bead-guide-mask" @tap="closeBeadGuideDrawer"></view>
+      <view class="bead-guide-panel">
+        <view class="bead-guide-handle"></view>
+        <view class="bead-guide-header">
+          <text class="bead-guide-title">珠径说明</text>
+          <button type="button" class="bead-guide-close" @tap="closeBeadGuideDrawer">
+            <text class="bead-guide-close-icon">✕</text>
+          </button>
+        </view>
+        <scroll-view scroll-y class="bead-guide-content">
+          <view
+            class="bead-guide-section"
+            v-for="(section, sectionIndex) in beadGuideSections"
+            :key="section.title || sectionIndex"
+          >
+            <text class="bead-guide-section-title">{{ section.title }}</text>
+            <text
+              v-for="(line, lineIndex) in section.lines"
+              :key="lineIndex"
+              class="bead-guide-line"
+            >
+              {{ line }}
+            </text>
+          </view>
+        </scroll-view>
+        <button class="bead-guide-confirm" @tap="closeBeadGuideDrawer">我知道了</button>
+      </view>
     </view>
   </view>
 </template>
@@ -507,6 +530,34 @@ const handleOnboardingAction = () => {
     return
   }
   dismissOnboarding()
+}
+
+const beadGuideSections = Object.freeze([
+  {
+    title: '关于测量手围和如何选择长度',
+    lines: ['实测手围 + 3cm = 需要长度', '比如：实测 14 + 3 = 17cm，就选 17cm 长度']
+  },
+  {
+    title: '关于珠子材质与尺寸说明',
+    lines: [
+      '1. 7*8 mm 金珠喷砂 约 2.5g',
+      '2. 7*8 mm 金珠镶红锆石 约 2.5g',
+      '3. 7*8 mm 巴西红碧玉 （天然）',
+      '4. 7*8 mm 白玛瑙 （人工优化）',
+      '5. 7*8 mm 黑玛瑙 （人工优化）',
+      '6. 7*8 mm 仿青金石 （人工合成）',
+      '7. 7*8 mm 虎眼石 （天然）',
+      '8. 7*8 mm 金耀石 （天然）',
+      '9. 7*8 mm 非洲翠 （天然）'
+    ]
+  }
+])
+const beadGuideDrawerVisible = ref(false)
+const openBeadGuideDrawer = () => {
+  beadGuideDrawerVisible.value = true
+}
+const closeBeadGuideDrawer = () => {
+  beadGuideDrawerVisible.value = false
 }
 
 const getMiniProgramBridge = () => {
@@ -2874,5 +2925,121 @@ const handleAddMarble = async () => {
 .delete-zone-text {
   font-size: 26rpx;
   letter-spacing: 2rpx;
+}
+
+.bead-guide-trigger {
+  cursor: pointer;
+}
+
+.bead-guide-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.bead-guide-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.bead-guide-panel {
+  width: 100%;
+  max-height: 70vh;
+  border-top-left-radius: 36rpx;
+  border-top-right-radius: 36rpx;
+  background: #fff;
+  padding: 24rpx 28rpx 32rpx;
+  box-sizing: border-box;
+  z-index: 951;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.bead-guide-handle {
+  width: 96rpx;
+  height: 8rpx;
+  border-radius: 999rpx;
+  background: rgba(0, 0, 0, 0.12);
+  align-self: center;
+}
+
+.bead-guide-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding-right: 96rpx;
+}
+
+.bead-guide-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #111827;
+  flex: 1;
+}
+
+.bead-guide-close {
+  border: none;
+  background: rgba(15, 23, 42, 0.06);
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.2s ease, transform 0.2s ease;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.bead-guide-close:active {
+  transform: translateY(-50%) scale(0.95);
+  background: rgba(15, 23, 42, 0.12);
+}
+
+.bead-guide-close-icon {
+  font-size: 32rpx;
+  color: #111827;
+  line-height: 1;
+}
+
+.bead-guide-content {
+  flex: 1;
+}
+
+.bead-guide-section {
+  margin-bottom: 24rpx;
+}
+
+.bead-guide-section-title {
+  font-size: 28rpx;
+  color: #1f2937;
+  font-weight: 500;
+  margin-bottom: 12rpx;
+  display: block;
+}
+
+.bead-guide-line {
+  display: block;
+  font-size: 26rpx;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+.bead-guide-confirm {
+  width: 100%;
+  border: none;
+  background: #111827;
+  color: #fff;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  padding: 20rpx 0;
 }
 </style>
