@@ -32,7 +32,7 @@
 
     <view class="selector-row">
       <view class="selector-field">
-        <text class="selector-label">圈长</text>
+        <text class="selector-label">手围约</text>
         <view class="selector-control selector-control-static">
           <view class="selector-value" style="padding: 10rpx 8rpx;">{{ formattedRingLength }}</view>
         </view>
@@ -360,14 +360,13 @@ const canAddMoreMarbles = computed(() => marbleCount.value < activeBraceletMaxBe
 const computedRingLengthCm = computed(() => {
   layoutVersion.value
   if (!marbleInstances.length) {
-    return MIN_RING_LENGTH
+    return 0
   }
   const totalDiameter = marbleInstances.reduce((sum, marble) => {
     const diameter = getMarbleDiameter(marble)
     return sum + (Number.isFinite(diameter) && diameter > 0 ? diameter : 0)
   }, 0)
-  const cm = totalDiameter * 100
-  return Math.max(cm, MIN_RING_LENGTH)
+  return totalDiameter * 100
 })
 
 const formattedRingLength = computed(() => `${computedRingLengthCm.value.toFixed(1)} cm`)
