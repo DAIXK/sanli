@@ -503,7 +503,7 @@ const viewerSwipeLock = {
 const onboardingSteps = [
   {
     title: '长按珠子可换位置',
-    desc: '按住珠子 3 秒后可拖动位置，或拖到底部删除'
+    desc: '按住珠子 3 秒后可拖动到任意位置，或拖到底部删除'
   },
   {
     title: '左右滑动空白区域',
@@ -1454,10 +1454,10 @@ const removeMarble = (marble, { record = true } = {}) => {
 const reorderState = {
   active: false,
   marble: null,
-  target: null,
   sourceIndex: -1,
   insertIndex: -1,
-  deleteIntent: false
+  deleteIntent: false,
+  indicatorPosition: null
 }
 
 const showDeleteZoneOverlay = () => {
@@ -1532,16 +1532,12 @@ const updateDragIndicatorDisplay = (position, mode = 'target') => {
 
 const refreshDragIndicator = () => {
   if (!dragIndicator) return
-  if (!reorderState.active) {
+  if (!reorderState.active || reorderState.deleteIntent) {
     hideDragIndicator()
     return
   }
-  if (reorderState.target) {
-    updateDragIndicatorDisplay(reorderState.target.position, 'target')
-    return
-  }
-  if (reorderState.insertIndex >= 0 && lastPointerIntersection) {
-    updateDragIndicatorDisplay(lastPointerIntersection, 'insert')
+  if (reorderState.indicatorPosition) {
+    updateDragIndicatorDisplay(reorderState.indicatorPosition, 'insert')
     return
   }
   hideDragIndicator()
@@ -1617,36 +1613,31 @@ const getPointerRingIntersection = () => {
   return pointerHitPoint
 }
 
-const determineEdgeInsertionIndex = (angle) => {
-  if (!marbleInstances.length) return -1
-  const totalArc = computeBraceletArcUsage()
-  const remainingGap = Math.max(Math.PI * 2 - totalArc, 0)
-  if (remainingGap <= 0.0001) {
-    return -1
-  }
-  const threshold = Math.min(Math.max(remainingGap * 0.45, 0.2), Math.PI / 2)
-  const distanceToStart = Math.min(angle, Math.abs(Math.PI * 2 - angle))
-  if (distanceToStart <= threshold) {
-    return 0
-  }
-  if (angle >= totalArc) {
-    const distanceToEnd = angle - totalArc
-    if (distanceToEnd <= threshold) {
-      return marbleInstances.length
-    }
-  }
-  return -1
+const computeIndicatorPositionFromAngle = (angle) => {
+  const [axisA, axisB] = ringOrientation.planeAxes
+  const normalAxis = ringOrientation.normalAxis
+  const axisVecA = axisVectors[axisA]
+  const axisVecB = axisVectors[axisB]
+  const normalVec = axisVectors[normalAxis]
+  if (!axisVecA || !axisVecB || !normalVec) return null
+  const radialOffset = (ringConfig.bandThickness || 0) / 2
+  const effectiveRadius = Math.max(ringConfig.radius + radialOffset, 0.002)
+  const position = new THREE.Vector3()
+  position.addScaledVector(axisVecA, Math.cos(angle) * effectiveRadius)
+  position.addScaledVector(axisVecB, Math.sin(angle) * effectiveRadius)
+  position.addScaledVector(normalVec, ringConfig.offsetZ)
+  return position
 }
 
-const computePointerInsertionIndex = () => {
+const computePointerInsertionInfo = () => {
   const intersection = getPointerRingIntersection()
-  if (!intersection) return -1
+  if (!intersection) return null
   const normalAxis = ringOrientation.normalAxis
   const normalVector = axisVectors[normalAxis]
   const [axisA, axisB] = ringOrientation.planeAxes
   const axisVecA = axisVectors[axisA]
   const axisVecB = axisVectors[axisB]
-  if (!normalVector || !axisVecA || !axisVecB) return -1
+  if (!normalVector || !axisVecA || !axisVecB) return null
   pointerRelative.copy(intersection).sub(pointerPlaneOrigin)
   const coordA = pointerRelative.dot(axisVecA)
   const coordB = pointerRelative.dot(axisVecB)
@@ -1654,7 +1645,27 @@ const computePointerInsertionIndex = () => {
   if (angle < 0) {
     angle += Math.PI * 2
   }
-  return determineEdgeInsertionIndex(angle)
+  const ordered = marbleInstances
+    .map((marble, index) => ({
+      marble,
+      angle: typeof marble.userData?.currentAngle === 'number' ? marble.userData.currentAngle : 0,
+      index
+    }))
+    .filter((item) => item.marble !== reorderState.marble)
+    .sort((a, b) => a.angle - b.angle)
+  let insertIndex = marbleInstances.length
+  if (!ordered.length) {
+    insertIndex = 0
+  } else {
+    for (const item of ordered) {
+      if (angle < item.angle) {
+        insertIndex = item.index
+        break
+      }
+    }
+  }
+  const position = computeIndicatorPositionFromAngle(angle)
+  return position ? { index: insertIndex, position } : null
 }
 
 const getDeleteZoneElement = () => {
@@ -1680,14 +1691,15 @@ const updateDeleteZoneHoverState = (event) => {
   if (!reorderState.active || !deleteZone.visible) {
     deleteZone.hovered = false
     reorderState.deleteIntent = false
+    reorderState.indicatorPosition = null
     return false
   }
   const hovered = isPointerInsideDeleteZone(event)
   deleteZone.hovered = hovered
   reorderState.deleteIntent = hovered
   if (hovered) {
-    reorderState.target = null
     reorderState.insertIndex = -1
+    reorderState.indicatorPosition = null
   }
   refreshDragIndicator()
   return hovered
@@ -1699,10 +1711,10 @@ const resetReorderState = () => {
   }
   reorderState.active = false
   reorderState.marble = null
-  reorderState.target = null
   reorderState.sourceIndex = -1
   reorderState.insertIndex = -1
   reorderState.deleteIntent = false
+  reorderState.indicatorPosition = null
   enableOrbitControls()
   hideDragIndicator()
   hideDeleteZoneOverlay()
@@ -1714,39 +1726,43 @@ const beginMarbleSwapSession = (marble) => {
   if (index === -1) return
   reorderState.active = true
   reorderState.marble = marble
-  reorderState.target = null
   reorderState.sourceIndex = index
   reorderState.insertIndex = -1
   reorderState.deleteIntent = false
+  reorderState.indicatorPosition = null
   disableOrbitControls()
   showDeleteZoneOverlay()
   setMarbleDragVisualState(marble, true)
   longPressPointer.active = false
   if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
     uni.showToast({
-      title: '拖到珠子交换/空隙改首尾/底部删除',
+      title: '拖动可插入新位置，或拖到底部删除',
       icon: 'none'
     })
   } else {
-    console.info('Swap mode activated')
+    console.info('Reorder mode activated')
   }
 }
 
-const updateReorderTargetFromPointer = () => {
-  if (!reorderState.active) return null
-  if (reorderState.deleteIntent) {
+const updateInsertionFromPointer = () => {
+  if (!reorderState.active || reorderState.deleteIntent) {
     refreshDragIndicator()
     return null
   }
-  const hovered = selectMarbleByPointer()
-  reorderState.target = hovered && hovered !== reorderState.marble ? hovered : null
-  if (reorderState.target) {
-    reorderState.insertIndex = -1
+  const info = computePointerInsertionInfo()
+  if (info) {
+    reorderState.insertIndex = info.index
+    if (!reorderState.indicatorPosition) {
+      reorderState.indicatorPosition = info.position.clone()
+    } else {
+      reorderState.indicatorPosition.copy(info.position)
+    }
   } else {
-    reorderState.insertIndex = computePointerInsertionIndex()
+    reorderState.insertIndex = -1
+    reorderState.indicatorPosition = null
   }
   refreshDragIndicator()
-  return reorderState.target
+  return info
 }
 
 const cancelMarbleSwapSession = () => {
@@ -1793,34 +1809,24 @@ const moveMarbleToIndex = (marble, targetIndex) => {
   return { moved: true, fromIndex, toIndex: insertIndex }
 }
 
-const completeMarbleSwap = () => {
+const completeMarbleInsertion = () => {
   if (!reorderState.active) return false
   const source = reorderState.marble
-  const target = reorderState.target
   const insertIndex = reorderState.insertIndex
   resetReorderState()
-  if (target) {
-    const { swapped, indexA, indexB } = swapMarbleOrder(source, target)
-    if (!swapped) return false
-    pushUndoEntry({ type: 'swap', marbleA: source, marbleB: target, indexA, indexB })
-    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
-      uni.showToast({
-        title: '已移动位置',
-        icon: 'none'
-      })
-    } else {
-      console.info('Swapped marble positions')
-    }
-    return true
-  }
-  if (insertIndex < 0) return false
-  const movingToStart = insertIndex === 0
+  if (!source || insertIndex < 0) return false
   const { moved, fromIndex, toIndex } = moveMarbleToIndex(source, insertIndex)
   if (!moved) return false
   pushUndoEntry({ type: 'move', marble: source, fromIndex, toIndex })
+  let toastTitle = '已调整顺序'
+  if (toIndex === 0) {
+    toastTitle = '已移动到开头'
+  } else if (toIndex === marbleInstances.length - 1) {
+    toastTitle = '已移动到末尾'
+  }
   if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
     uni.showToast({
-      title: movingToStart ? '已移动到开头' : '已移动到末尾',
+      title: toastTitle,
       icon: 'none'
     })
   } else {
@@ -1927,7 +1933,7 @@ const bindPointerEvents = () => {
       if (setPointerFromEvent(event)) {
         const hoveringDelete = updateDeleteZoneHoverState(event)
         if (!hoveringDelete) {
-          updateReorderTargetFromPointer()
+          updateInsertionFromPointer()
         }
       }
       return
@@ -1952,11 +1958,11 @@ const bindPointerEvents = () => {
         if (hoveringDelete) {
           completeMarbleDeletion()
         } else {
-          updateReorderTargetFromPointer()
-          completeMarbleSwap()
+          updateInsertionFromPointer()
+          completeMarbleInsertion()
         }
       } else {
-        completeMarbleSwap()
+        completeMarbleInsertion()
       }
     }
     cancelLongPressTimer()
