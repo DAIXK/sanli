@@ -6,7 +6,7 @@ export default {
     price: '-',
     name: '7*8手串',
     background: [
-      { glb: '/static/models/圈圈45.gltf', name: '7*8手串', length: 14 },
+      { glb: '/static/models/圈圈45.gltf', name: '7*8手串', length: 14, max:29 },
     
     ],
     product: [

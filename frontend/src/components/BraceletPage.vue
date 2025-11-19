@@ -333,6 +333,7 @@ const braceletProgress = computed(() => {
   return `${selectedBraceletIndex.value + 1}/${list.length}`
 })
 const backgroundOptions = computed(() => activeBracelet.value?.background ?? [])
+const activeBackgroundEntry = computed(() => backgroundOptions.value[0] || null)
 const lengthCmToRadius = (length) => {
   const numeric = Number(length)
   if (!Number.isFinite(numeric) || numeric <= 0) return null
@@ -346,12 +347,15 @@ const deriveRadius = (length, fallback) => {
   }
   return Math.max(fallback || MIN_RING_RADIUS, MIN_RING_RADIUS)
 }
-const modelUrl = computed(() => {
-  const options = backgroundOptions.value
-  if (!options.length) return ''
-  const target = options[0]
-  return target?.glb || ''
+const modelUrl = computed(() => activeBackgroundEntry.value?.glb || '')
+const activeBraceletMaxBeads = computed(() => {
+  const max = Number(activeBackgroundEntry.value?.max)
+  if (Number.isFinite(max) && max > 0) {
+    return Math.floor(max)
+  }
+  return Infinity
 })
+const canAddMoreMarbles = computed(() => marbleCount.value < activeBraceletMaxBeads.value)
 
 const computedRingLengthCm = computed(() => {
   layoutVersion.value
@@ -2661,23 +2665,30 @@ watch(
 )
 
 watch(
-  backgroundOptions,
-  (options) => {
-    const target = options[0]
+  activeBraceletMaxBeads,
+  (max) => {
+    marbleLimit.value = Number.isFinite(max) ? max : Infinity
+  },
+  { immediate: true }
+)
+
+watch(
+  activeBackgroundEntry,
+  (entry) => {
+    if (!entry) return
     let nextRadius = ringConfig.radius
-    if (target?.radius && Number.isFinite(target.radius)) {
-      nextRadius = Math.max(target.radius, MIN_RING_RADIUS)
-    } else if (target?.length) {
-      nextRadius = deriveRadius(target.length, ringConfig.radius)
+    if (entry?.radius && Number.isFinite(entry.radius)) {
+      nextRadius = Math.max(entry.radius, MIN_RING_RADIUS)
+    } else if (entry?.length) {
+      nextRadius = deriveRadius(entry.length, ringConfig.radius)
     } else {
       nextRadius = Math.max(nextRadius, MIN_RING_RADIUS)
     }
     ringConfig.minRadius = Math.max(nextRadius, MIN_RING_RADIUS)
     ringConfig.baseRadius = ringConfig.minRadius
     setRingRadius(nextRadius)
-    if (sceneReady.value) {
-      refreshMarbleLayout()
-    }
+    marbleLimit.value = activeBraceletMaxBeads.value
+    refreshMarbleLayout()
   },
   { immediate: true }
 )
@@ -2741,6 +2752,18 @@ const orientMarble = (
 
 const handleAddMarble = async () => {
   if (!scene || marbleLoading.value) return
+  if (!canAddMoreMarbles.value) {
+    const message = `最多可添加 ${activeBraceletMaxBeads.value} 颗`
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: message,
+        icon: 'none'
+      })
+    } else {
+      console.info(message)
+    }
+    return
+  }
   const productGlb = activeProductGlb.value
   if (!productGlb) {
     if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
