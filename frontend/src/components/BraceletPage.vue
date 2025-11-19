@@ -17,14 +17,14 @@
       >
         生成视频
       </button>
-      <button
+      <!-- <button
         class="ghost-button ghost-button--secondary"
         :class="{ 'is-disabled': !canGenerateVideo || animationRecording }"
         :disabled="!canGenerateVideo || animationRecording"
         @tap="handleGenerateAnimation"
       >
         {{ animationRecording ? '生成中...' : '生成动画' }}
-      </button>
+      </button> -->
       </view>
     </view>
 
@@ -34,7 +34,7 @@
       <view class="selector-field">
         <text class="selector-label">圈长</text>
         <view class="selector-control selector-control-static">
-          <view class="selector-value">{{ formattedRingLength }}</view>
+          <view class="selector-value" style="padding: 10rpx 8rpx;">{{ formattedRingLength }}</view>
         </view>
       </view>
       <view class="selector-field">
@@ -65,11 +65,11 @@
         <image class="viewer-freeze-image" :src="viewerFreezeImage" mode="aspectFit" />
       </view>
     </view>
-    <view class="hand-preview-control">
+    <!-- <view class="hand-preview-control">
       <button class="hand-preview-button" @tap="handleHandPreviewToggle">
         {{ handPreviewEnabled ? '隐藏手模' : '手模预览' }}
       </button>
-    </view>
+    </view> -->
 
     <view class="undo-container" v-if="productList.length || showSwipeHint">
       <view class="swipe-hint" v-if="showSwipeHint">
@@ -170,7 +170,7 @@
         <button class="bead-guide-confirm" @tap="closeBeadGuideDrawer">我知道了</button>
       </view>
     </view>
-    <view class="animation-modal" v-if="animationModalVisible">
+    <!-- <view class="animation-modal" v-if="animationModalVisible">
       <view class="animation-mask" @tap="closeAnimationModal"></view>
       <view class="animation-panel">
         <text class="animation-title">生成动画预览</text>
@@ -184,7 +184,7 @@
         ></video>
         <button class="animation-close" @tap="closeAnimationModal">关闭</button>
       </view>
-    </view>
+    </view> -->
   </view>
 </template>
 

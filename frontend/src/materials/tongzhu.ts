@@ -7,11 +7,7 @@ export default {
     name: '7*8手串',
     background: [
       { glb: '/static/models/圈圈45.gltf', name: '7*8手串', length: 14 },
-      { glb: '/static/models/圈圈47.gltf', name: '7*8手串', length: 15 },
-      { glb: '/static/models/圈圈51.gltf', name: '7*8手串', length: 16 },
-      { glb: '/static/models/圈圈54.gltf', name: '7*8手串', length: 17 },
-      { glb: '/static/models/圈圈57.gltf', name: '7*8手串', length: 18 },
-      { glb: '/static/models/圈圈60.gltf', name: '7*8手串', length: 19 }
+    
     ],
     product: [
       {
