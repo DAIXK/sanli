@@ -860,6 +860,10 @@ const marbleBounds = {
   thickness: 0
 }
 const productBounds = new Map()
+const DRAG_SCALE_MULTIPLIER = 1.12
+const DRAG_LIFT_DISTANCE = 0.004
+let dragIndicator = null
+let lastPointerIntersection = null
 const updateGlobalBounds = ({ diameter, thickness }) => {
   if (Number.isFinite(diameter) && diameter > 0) {
     marbleBounds.diameter = diameter
@@ -1380,6 +1384,83 @@ const reorderState = {
   insertIndex: -1
 }
 
+const ensureMarbleBaseScale = (marble) => {
+  if (!marble) return null
+  if (!marble.userData.baseScale) {
+    marble.userData.baseScale = marble.scale.clone()
+  }
+  return marble.userData.baseScale
+}
+
+const setMarbleDragVisualState = (marble, dragging) => {
+  if (!marble) return
+  const baseScale = ensureMarbleBaseScale(marble)
+  if (baseScale) {
+    const multiplier = dragging ? DRAG_SCALE_MULTIPLIER : 1
+    marble.scale.set(
+      baseScale.x * multiplier,
+      baseScale.y * multiplier,
+      baseScale.z * multiplier
+    )
+  }
+  marble.userData.dragOffset = dragging ? DRAG_LIFT_DISTANCE : 0
+  marble.userData.dragging = dragging
+  refreshMarblePlacement(marble)
+}
+
+const hideDragIndicator = () => {
+  if (dragIndicator) {
+    dragIndicator.visible = false
+  }
+}
+
+const setupDragIndicator = () => {
+  if (!scene) return
+  if (dragIndicator) {
+    scene.add(dragIndicator)
+    return
+  }
+  const geometry = new THREE.SphereGeometry(0.005, 20, 20)
+  const material = new THREE.MeshBasicMaterial({
+    color: 0xffc53d,
+    transparent: true,
+    opacity: 0.35,
+    depthTest: false,
+    depthWrite: false
+  })
+  dragIndicator = new THREE.Mesh(geometry, material)
+  dragIndicator.visible = false
+  scene.add(dragIndicator)
+}
+
+const updateDragIndicatorDisplay = (position, mode = 'target') => {
+  if (!dragIndicator || !position) return
+  dragIndicator.visible = true
+  dragIndicator.position.copy(position)
+  const scale = mode === 'insert' ? 0.8 : 1
+  dragIndicator.scale.set(scale, scale, scale)
+  const color = mode === 'insert' ? 0x38bdf8 : 0xffc53d
+  dragIndicator.material.color.set(color)
+  dragIndicator.material.opacity = mode === 'insert' ? 0.45 : 0.35
+}
+
+const refreshDragIndicator = () => {
+  if (!dragIndicator) return
+  if (!reorderState.active) {
+    hideDragIndicator()
+    return
+  }
+  if (reorderState.target) {
+    updateDragIndicatorDisplay(reorderState.target.position, 'target')
+    return
+  }
+  if (reorderState.insertIndex >= 0 && lastPointerIntersection) {
+    updateDragIndicatorDisplay(lastPointerIntersection, 'insert')
+    return
+  }
+  hideDragIndicator()
+}
+
 const getMarbleDiameter = (marble) =>
   marble?.userData?.bounds?.diameter || marbleBounds.diameter || 0.004
 
@@ -1439,7 +1520,14 @@ const getPointerRingIntersection = () => {
   pointerPlane.setFromNormalAndCoplanarPoint(normalVector, pointerPlaneOrigin)
   raycaster.setFromCamera(pointer, camera)
   const hit = raycaster.ray.intersectPlane(pointerPlane, pointerHitPoint)
-  if (!hit) return null
+  if (!hit) {
+    lastPointerIntersection = null
+    return null
+  }
+  if (!lastPointerIntersection) {
+    lastPointerIntersection = new THREE.Vector3()
+  }
+  lastPointerIntersection.copy(pointerHitPoint)
   return pointerHitPoint
 }
 
@@ -1484,12 +1572,16 @@ const computePointerInsertionIndex = () => {
 }
 
 const resetReorderState = () => {
+  if (reorderState.marble) {
+    setMarbleDragVisualState(reorderState.marble, false)
+  }
   reorderState.active = false
   reorderState.marble = null
   reorderState.target = null
   reorderState.sourceIndex = -1
   reorderState.insertIndex = -1
   enableOrbitControls()
+  hideDragIndicator()
 }
 
 const beginMarbleSwapSession = (marble) => {
@@ -1502,6 +1594,7 @@ const beginMarbleSwapSession = (marble) => {
   reorderState.sourceIndex = index
   reorderState.insertIndex = -1
   disableOrbitControls()
+  setMarbleDragVisualState(marble, true)
   longPressPointer.active = false
   if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
     uni.showToast({
@@ -1522,6 +1615,7 @@ const updateReorderTargetFromPointer = () => {
   } else {
     reorderState.insertIndex = computePointerInsertionIndex()
   }
+  refreshDragIndicator()
   return reorderState.target
 }
 
@@ -1753,6 +1847,7 @@ const initScene = async () => {
 
   scene = new THREE.Scene()
   scene.background = new THREE.Color('#ffffff')
+  setupDragIndicator()
 
   camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
   camera.position.set(0, 1, 4)
@@ -1809,6 +1904,14 @@ const initScene = async () => {
 const disposeScene = () => {
   cancelMarbleSwapSession()
   enableOrbitControls()
+  if (dragIndicator) {
+    dragIndicator.visible = false
+    dragIndicator.geometry?.dispose?.()
+    dragIndicator.material?.dispose?.()
+    dragIndicator.removeFromParent?.()
+    dragIndicator = null
+  }
+  lastPointerIntersection = null
   if (animationFrameId !== null) {
     caf(animationFrameId)
     animationFrameId = null
@@ -1943,6 +2046,7 @@ const reflowMarbles = () => {
   const maxArc = Math.PI * 2
   let accumulatedArc = 0
   marbleInstances.forEach((marble) => {
+    ensureMarbleBaseScale(marble)
     const diameter = getMarbleDiameter(marble)
     const arcWidth = arcWidthFromDiameter(diameter, radius)
     if (accumulatedArc + arcWidth > maxArc) return
@@ -1961,6 +2065,21 @@ const reflowMarbles = () => {
     orientMarble(marble, position, rotationConfig)
     accumulatedArc += arcWidth
   })
+}
+
+function refreshMarblePlacement(marble) {
+  if (!marble) return
+  const diameter = getMarbleDiameter(marble)
+  const arcStart =
+    typeof marble.userData?.arcStart === 'number' ? marble.userData.arcStart : 0
+  const arcWidth =
+    typeof marble.userData?.arcWidth === 'number'
+      ? marble.userData.arcWidth
+      : arcWidthFromDiameter(diameter, getBraceletRadius())
+  const placement = buildPlacementFromArc(arcStart, arcWidth, diameter)
+  if (placement) {
+    orientMarble(marble, placement.position, marble.userData.rotationConfig)
+  }
 }
 
 const arcWidthFromDiameter = (diameter, radius) => {
@@ -2085,6 +2204,10 @@ const orientMarble = (
   if (worldAxis.lengthSq() > 0) {
     marble.rotateOnWorldAxis(worldAxis, rotation)
   }
+  const dragOffset = typeof marble.userData?.dragOffset === 'number' ? marble.userData.dragOffset : 0
+  if (dragOffset) {
+    marble.position.addScaledVector(normalVector, dragOffset)
+  }
 }
 
 const handleAddMarble = async () => {
@@ -2116,6 +2239,8 @@ const handleAddMarble = async () => {
       node.userData.product = activeProduct.value
       node.userData.bounds = bounds
     })
+    ensureMarbleBaseScale(marble)
+    setMarbleDragVisualState(marble, false)
     if (bounds) {
       updateGlobalBounds(bounds)
     }
