@@ -464,8 +464,8 @@ const viewerSwipeLock = {
 }
 const onboardingSteps = [
   {
-    title: '长按珠子可删除',
-    desc: '按住已添加的珠子约 3 秒，即可移除它'
+    title: '长按珠子可换位置',
+    desc: '按住已添加的珠子约 3 秒，拖到另一颗珠子即可交换顺序'
   },
   {
     title: '左右滑动空白区域',
@@ -787,6 +787,11 @@ const handleUndo = () => {
     success = marble ? removeMarble(marble, { record: false }) : false
   } else if (record?.type === 'remove') {
     success = marble ? restoreMarble(marble, record.index) : false
+  } else if (record?.type === 'swap') {
+    const marbleA = record?.marbleA ? toRaw(record.marbleA) : null
+    const marbleB = record?.marbleB ? toRaw(record.marbleB) : null
+    const result = swapMarbleOrder(marbleA, marbleB)
+    success = result.swapped
   }
   if (!success) {
     undoStack.value.push(entry)
@@ -825,6 +830,21 @@ let resizeTeardown = null
 let canvasElement = null
 let pmremGenerator = null
 let envTexture = null
+let orbitControlsLocked = false
+const disableOrbitControls = () => {
+  if (orbitControlsLocked) return
+  orbitControlsLocked = true
+  if (controls) {
+    controls.enabled = false
+  }
+}
+const enableOrbitControls = () => {
+  if (!orbitControlsLocked) return
+  orbitControlsLocked = false
+  if (controls) {
+    controls.enabled = true
+  }
+}
 const instance = getCurrentInstance()
 let supportsUint32Index = true
 const marbleTemplateCache = new Map()
@@ -1003,10 +1023,12 @@ const cancelLongPressTimer = () => {
 const pushUndoEntry = (entry) => {
   if (!entry || typeof entry !== 'object') return
   const normalized = { ...entry }
-  if (normalized.marble && typeof normalized.marble === 'object') {
-    const rawMarble = toRaw(normalized.marble)
-    normalized.marble = rawMarble ? markRaw(rawMarble) : rawMarble
-  }
+  ;['marble', 'marbleA', 'marbleB'].forEach((key) => {
+    if (normalized[key] && typeof normalized[key] === 'object') {
+      const rawMarble = toRaw(normalized[key])
+      normalized[key] = rawMarble ? markRaw(rawMarble) : rawMarble
+    }
+  })
   undoStack.value.push(normalized)
 }
 
@@ -1339,16 +1361,85 @@ const removeMarble = (marble, { record = true } = {}) => {
   return true
 }
 
-const removeMarbleWithFeedback = (marble, options = {}) => {
-  const removed = removeMarble(marble, options)
-  if (!removed) return false
+const reorderState = {
+  active: false,
+  marble: null,
+  target: null,
+  sourceIndex: -1
+}
+
+const resetReorderState = () => {
+  reorderState.active = false
+  reorderState.marble = null
+  reorderState.target = null
+  reorderState.sourceIndex = -1
+  enableOrbitControls()
+}
+
+const beginMarbleSwapSession = (marble) => {
+  if (!marble) return
+  const index = marbleInstances.indexOf(marble)
+  if (index === -1) return
+  reorderState.active = true
+  reorderState.marble = marble
+  reorderState.target = null
+  reorderState.sourceIndex = index
+  disableOrbitControls()
+  longPressPointer.active = false
   if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
     uni.showToast({
-      title: '已删除该珠子',
+      title: '拖动到另一颗珠子可交换位置',
       icon: 'none'
     })
   } else {
-    console.info('Selected marble removed')
+    console.info('Swap mode activated')
+  }
+}
+
+const updateReorderTargetFromPointer = () => {
+  if (!reorderState.active) return null
+  const hovered = selectMarbleByPointer()
+  reorderState.target = hovered && hovered !== reorderState.marble ? hovered : null
+  return reorderState.target
+}
+
+const cancelMarbleSwapSession = () => {
+  if (!reorderState.active) return
+  resetReorderState()
+}
+
+const swapMarbleOrder = (first, second) => {
+  if (!first || !second) {
+    return { swapped: false, indexA: -1, indexB: -1 }
+  }
+  const indexA = marbleInstances.indexOf(first)
+  const indexB = marbleInstances.indexOf(second)
+  if (indexA === -1 || indexB === -1 || indexA === indexB) {
+    return { swapped: false, indexA, indexB }
+  }
+  ;[marbleInstances[indexA], marbleInstances[indexB]] = [
+    marbleInstances[indexB],
+    marbleInstances[indexA]
+  ]
+  reflowMarbles()
+  return { swapped: true, indexA, indexB }
+}
+
+const completeMarbleSwap = () => {
+  if (!reorderState.active) return false
+  const source = reorderState.marble
+  const target = reorderState.target
+  resetReorderState()
+  const { swapped, indexA, indexB } = swapMarbleOrder(source, target)
+  if (!swapped) return false
+  pushUndoEntry({ type: 'swap', marbleA: source, marbleB: target, indexA, indexB })
+  if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+    uni.showToast({
+      title: '已交换位置',
+      icon: 'none'
+    })
+  } else {
+    console.info('Swapped marble positions')
   }
   return true
 }
@@ -1374,7 +1465,7 @@ const startLongPressTimer = (marble, event) => {
   if (!marble) return
   capturePointerOrigin(event)
   if (!Number.isFinite(LONG_PRESS_DURATION) || LONG_PRESS_DURATION <= 0) {
-    removeMarbleWithFeedback(marble)
+    beginMarbleSwapSession(marble)
     pendingMarble = null
     return
   }
@@ -1383,7 +1474,7 @@ const startLongPressTimer = (marble, event) => {
     pendingMarble = null
     longPressTimer = null
     if (target) {
-      removeMarbleWithFeedback(target)
+      beginMarbleSwapSession(target)
     }
   }, LONG_PRESS_DURATION)
 }
@@ -1420,6 +1511,7 @@ const bindPointerEvents = () => {
     event.preventDefault?.()
     event.stopPropagation?.()
     lockViewerSwipe()
+    cancelMarbleSwapSession()
     if (!setPointerFromEvent(event)) {
       cancelLongPressTimer()
       return
@@ -1432,6 +1524,12 @@ const bindPointerEvents = () => {
     }
   }
   const handlePointerMove = (event) => {
+    if (reorderState.active) {
+      if (setPointerFromEvent(event)) {
+        updateReorderTargetFromPointer()
+      }
+      return
+    }
     if (!longPressPointer.active) return
     const source =
       event?.touches?.[0] || event?.changedTouches?.[0] || event?.originalEvent?.touches?.[0] || event
@@ -1444,17 +1542,25 @@ const bindPointerEvents = () => {
       cancelLongPressTimer()
     }
   }
-  const handlePointerUp = () => {
+  const handlePointerUp = (event) => {
     releaseViewerSwipe()
+    if (reorderState.active) {
+      setPointerFromEvent(event)
+      updateReorderTargetFromPointer()
+      completeMarbleSwap()
+    }
     cancelLongPressTimer()
+    cancelMarbleSwapSession()
   }
   const handlePointerLeave = () => {
     releaseViewerSwipe()
     cancelLongPressTimer()
+    cancelMarbleSwapSession()
   }
   const handlePointerCancel = () => {
     releaseViewerSwipe()
     cancelLongPressTimer()
+    cancelMarbleSwapSession()
   }
   target.addEventListener('pointerdown', handlePointerDown)
   target.addEventListener('pointermove', handlePointerMove)
@@ -1540,6 +1646,8 @@ const initScene = async () => {
 }
 
 const disposeScene = () => {
+  cancelMarbleSwapSession()
+  enableOrbitControls()
   if (animationFrameId !== null) {
     caf(animationFrameId)
     animationFrameId = null
