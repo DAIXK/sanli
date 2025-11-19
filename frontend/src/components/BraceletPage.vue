@@ -356,21 +356,6 @@ const activeBraceletMaxBeads = computed(() => {
   return Infinity
 })
 const canAddMoreMarbles = computed(() => marbleCount.value < activeBraceletMaxBeads.value)
-
-const computedRingLengthCm = computed(() => {
-  layoutVersion.value
-  if (!marbleInstances.length) {
-    return 0
-  }
-  const totalDiameter = marbleInstances.reduce((sum, marble) => {
-    const diameter = getMarbleDiameter(marble)
-    return sum + (Number.isFinite(diameter) && diameter > 0 ? diameter : 0)
-  }, 0)
-  return totalDiameter * 100
-})
-
-const formattedRingLength = computed(() => `${computedRingLengthCm.value.toFixed(1)} cm`)
-
 const CANVAS_ID = 'modelCanvas'
 
 const parseWidthToDiameter = (width) => {
@@ -415,6 +400,54 @@ const beadSizeLabels = computed(() => beadSizeOptions.value.map((item) => item.l
 const activeBeadOption = computed(
   () => beadSizeOptions.value[selectedBeadSizeIndex.value] || beadSizeOptions.value[0] || null
 )
+
+const extractUnitCmFromName = (text) => {
+  if (!text || typeof text !== 'string') return null
+  const match = text.match(/(\d+(\.\d+)?)/)
+  if (!match) return null
+  const numeric = Number(match[1])
+  if (!Number.isFinite(numeric)) return null
+  if (text.toLowerCase().includes('cm')) {
+    return numeric
+  }
+  return numeric / 10
+}
+
+const activeBeadUnitCm = computed(() => {
+  const backgroundUnit = extractUnitCmFromName(activeBackgroundEntry.value?.name)
+  if (Number.isFinite(backgroundUnit) && backgroundUnit > 0) {
+    return backgroundUnit
+  }
+  const widthSource =
+    activeProduct.value?.width || activeBeadOption.value?.width || activeBackgroundEntry.value?.width
+  const parsedWidth = parseWidthToDiameter(widthSource)
+  if (Number.isFinite(parsedWidth) && parsedWidth > 0) {
+    return parsedWidth * 100
+  }
+  const fallbackDiameter = marbleBounds.diameter
+  if (Number.isFinite(fallbackDiameter) && fallbackDiameter > 0) {
+    return fallbackDiameter * 100
+  }
+  return 0
+})
+
+const computedRingLengthCm = computed(() => {
+  layoutVersion.value
+  const unitCm = activeBeadUnitCm.value
+  if (Number.isFinite(unitCm) && unitCm > 0) {
+    return Number((unitCm * marbleInstances.length).toFixed(2))
+  }
+  if (!marbleInstances.length) {
+    return 0
+  }
+  const totalDiameter = marbleInstances.reduce((sum, marble) => {
+    const diameter = getMarbleDiameter(marble)
+    return sum + (Number.isFinite(diameter) && diameter > 0 ? diameter : 0)
+  }, 0)
+  return totalDiameter * 100
+})
+
+const formattedRingLength = computed(() => `${computedRingLengthCm.value.toFixed(1)} cm`)
 const productList = computed(() => {
   const targetWidth = activeBeadOption.value?.value
   const list = rawProductList.value
