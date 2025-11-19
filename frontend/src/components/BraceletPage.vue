@@ -38,9 +38,9 @@
         </view>
       </view>
       <view class="selector-field">
-        <text class="selector-label">珠径</text>
+        <text class="selector-label">购买前必看</text>
         <view class="selector-control bead-guide-trigger" @tap="openBeadGuideDrawer">
-          <view class="selector-value">{{ beadSizeLabels[selectedBeadSizeIndex] }}</view>
+          <view class="selector-value">点我</view>
         </view>
       </view>
     </view>
@@ -145,7 +145,7 @@
       <view class="bead-guide-panel">
         <view class="bead-guide-handle"></view>
         <view class="bead-guide-header">
-          <text class="bead-guide-title">珠径说明</text>
+          <text class="bead-guide-title">关于测量手围和如何选择长度</text>
           <button type="button" class="bead-guide-close" @tap="closeBeadGuideDrawer">
             <text class="bead-guide-close-icon">✕</text>
           </button>
@@ -600,21 +600,21 @@ const handleOnboardingAction = () => {
 
 const beadGuideSections = Object.freeze([
   {
-    title: '关于测量手围和如何选择长度',
+    title: '',
     lines: ['实测手围 + 3cm = 需要长度', '比如：实测 14 + 3 = 17cm，就选 17cm 长度']
   },
   {
     title: '关于珠子材质与尺寸说明',
     lines: [
-      '1. 7*8 mm 金珠喷砂 约 2.5g',
-      '2. 7*8 mm 金珠镶红锆石 约 2.5g',
-      '3. 7*8 mm 巴西红碧玉 （天然）',
-      '4. 7*8 mm 白玛瑙 （人工优化）',
-      '5. 7*8 mm 黑玛瑙 （人工优化）',
-      '6. 7*8 mm 仿青金石 （人工合成）',
-      '7. 7*8 mm 虎眼石 （天然）',
-      '8. 7*8 mm 金耀石 （天然）',
-      '9. 7*8 mm 非洲翠 （天然）'
+      '1. 金珠喷砂 7*8 mm 约 2.5g',
+      '2. 金珠镶红锆石 7*8 mm 约 2.5g',
+      '3. 巴西红碧玉 （天然）7*8 mm ',
+      '4. 白玛瑙 （人工优化）7*8 mm ',
+      '5. 黑玛瑙 （人工优化）7*8 mm ',
+      '6. 仿青金石 （人工合成）7*8 mm ',
+      '7. 虎眼石 （天然）7*8 mm ',
+      '8. 金耀石 （天然）7*8 mm ',
+      '9. 非洲翠 （天然）7*8 mm '
     ]
   }
 ])
@@ -3498,7 +3498,7 @@ const handleAddMarble = async () => {
 }
 
 .bead-guide-illustration {
-  width: 35%;
+  width: 100%;
   height: auto;
   min-height: 180rpx;
   display: block;
