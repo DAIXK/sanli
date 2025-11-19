@@ -479,7 +479,7 @@ const viewerSwipeLock = {
 const onboardingSteps = [
   {
     title: '长按珠子可换位置',
-    desc: '按住珠子 3 秒后可拖动，与珠子互换、扔空隙做首尾，或拖到底部删除'
+    desc: '按住珠子 3 秒后可拖动位置，或拖到底部删除'
   },
   {
     title: '左右滑动空白区域',
@@ -1752,7 +1752,7 @@ const completeMarbleSwap = () => {
     pushUndoEntry({ type: 'swap', marbleA: source, marbleB: target, indexA, indexB })
     if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
       uni.showToast({
-        title: '已交换位置',
+        title: '已移动位置',
         icon: 'none'
       })
     } else {
