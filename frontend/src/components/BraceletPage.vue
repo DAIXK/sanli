@@ -71,38 +71,24 @@
       </button>
     </view> -->
 
-    <view class="undo-container" v-if="productList.length || showSwipeHint">
-      <view class="swipe-hint" v-if="showSwipeHint">
-        <text class="swipe-hint-arrow swipe-hint-arrow-left">←</text>
-        <text class="swipe-hint-text">空白处左右滑动可切换页面</text>
-        <text class="swipe-hint-arrow swipe-hint-arrow-right">→</text>
+    <view class="product-carousel" v-if="visibleProductList.length">
+      <view class="carousel-header">
+        <button
+          class="undo-button"
+          type="button"
+          :class="{ 'is-disabled': !canUndo }"
+          :disabled="!canUndo"
+          @tap="handleUndo"
+        >
+          <view class="undo-button-content">
+            <text class="undo-icon">↺</text>
+            <text class="undo-label">撤销</text>
+          </view>
+        </button>
       </view>
-      <button
-        v-if="productList.length"
-        class="undo-button"
-        type="button"
-        :class="{ 'is-disabled': !canUndo }"
-        :disabled="!canUndo"
-        @tap="handleUndo"
-      >
-        <view class="undo-button-content">
-          <text class="undo-icon">↺</text>
-          <text class="undo-label">撤销</text>
-        </view>
-      </button>
-    </view>
-
-    <view class="product-carousel" v-if="productList.length">
-      <scroll-view
-        class="product-scroll"
-        scroll-x="true"
-        show-scrollbar="false"
-        @touchstart.stop="noop"
-        @touchmove.stop="noop"
-        @touchend.stop="noop"
-      >
+      <view class="product-grid">
         <view
-          v-for="(item, index) in productList"
+          v-for="(item, index) in visibleProductList"
           :key="item.glb || index"
           class="product-item"
           :class="{ active: selectedProductIndex === index }"
@@ -118,10 +104,7 @@
           </view>
           <text class="product-name">{{ item.name }}</text>
         </view>
-      </scroll-view>
-      <view class="carousel-fade left" v-if="productList.length > 1"></view>
-      <view class="carousel-fade right" v-if="productList.length > 1"></view>
-      <text class="carousel-hint" v-if="productList.length > 2">滑动查看更多</text>
+      </view>
     </view>
     <view class="onboarding-overlay" v-if="showOnboarding && currentOnboardingStep">
       <view class="onboarding-bubble">
@@ -455,7 +438,8 @@ const productList = computed(() => {
   const filtered = list.filter((item) => (item.width || item.diameter) === targetWidth)
   return filtered.length ? filtered : list
 })
-const activeProduct = computed(() => productList.value[selectedProductIndex.value] || {})
+const visibleProductList = computed(() => productList.value.slice(0, 12))
+const activeProduct = computed(() => visibleProductList.value[selectedProductIndex.value] || {})
 const activeProductGlb = computed(() => activeProduct.value?.glb || '')
 const DEFAULT_FACE_ROTATION = (3 * Math.PI) / 2
 const activeProductRotation = computed(() => {
@@ -539,7 +523,7 @@ const deleteZone = reactive({
   hovered: false
 })
 const selectProduct = (index) => {
-  const list = productList.value
+  const list = visibleProductList.value
   if (!Array.isArray(list) || !list.length) return
   if (!Number.isInteger(index)) return
   const clamped = Math.min(Math.max(index, 0), list.length - 1)
@@ -618,7 +602,7 @@ const beadGuideSections = Object.freeze([
     ]
   }
 ])
-const HAND_MODEL_URL = '/static/models/手模1mm.gltf'
+const HAND_MODEL_URL = '/static/models/手模4.gltf'
 const beadGuideDrawerVisible = ref(false)
 const beadGuideImageUrl = new URL('../../static/img/shou.jpg', import.meta.url).href
 const openBeadGuideDrawer = () => {
@@ -830,7 +814,6 @@ const hasSwipeRouteTargets = computed(() => {
 const canSwipeBlankArea = computed(
   () => hasSwipeRouteTargets.value || braceletTypes.value.length > 1
 )
-const showSwipeHint = computed(() => canSwipeBlankArea.value && !swipeHintDismissed.value)
 const handleSwipeHintAcknowledge = () => {
   swipeHintDismissed.value = true
 }
@@ -1372,7 +1355,7 @@ const resetMarbles = () => {
   }
   marbleInstances.length = 0
   marbleCount.value = 0
-  marbleLimit.value = Infinity
+  marbleLimit.value = activeBraceletMaxBeads.value
   updateBraceletPrice()
   refreshMarbleLayout()
 }
@@ -1768,7 +1751,7 @@ const restoreMarble = (marble, index = marbleInstances.length) => {
   scene.add(marble)
   marbleInstances.splice(clamped, 0, marble)
   marbleCount.value = marbleInstances.length
-  marbleLimit.value = Infinity
+  marbleLimit.value = activeBraceletMaxBeads.value
   updateBraceletPrice()
   refreshMarbleLayout()
   return true
@@ -1784,7 +1767,7 @@ const removeMarble = (marble, { record = true } = {}) => {
   scene.remove(target)
   marbleInstances.splice(index, 1)
   marbleCount.value = marbleInstances.length
-  marbleLimit.value = Infinity
+  marbleLimit.value = activeBraceletMaxBeads.value
   updateBraceletPrice()
   if (record) {
     pushUndoEntry({ type: 'remove', marble: target, index })
@@ -2451,7 +2434,7 @@ const disposeScene = () => {
   marbleCount.value = 0
   updateBraceletPrice()
   sceneReady.value = false
-  marbleLimit.value = Infinity
+  marbleLimit.value = activeBraceletMaxBeads.value
   ringMetrics.minRadius = Infinity
   ringMetrics.maxRadius = 0
   ringConfig.bandThickness = 0
@@ -2663,7 +2646,7 @@ watch(
 )
 
 watch(
-  productList,
+  visibleProductList,
   (list) => {
     if (!list.length) {
       selectedProductIndex.value = 0
@@ -2837,7 +2820,6 @@ const handleAddMarble = async () => {
     scene.add(marble)
     marbleInstances.push(marble)
     marbleCount.value = marbleInstances.length
-    marbleLimit.value = Infinity
     updateBraceletPrice()
     pushUndoEntry({ type: 'add', marble })
     refreshMarbleLayout()
@@ -3097,103 +3079,46 @@ const handleAddMarble = async () => {
   font-size: 24rpx;
 }
 
-.undo-container {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 20rpx;
-  padding: 20rpx 0 8rpx;
-  flex-wrap: wrap;
-}
-
 .undo-button {
-  margin-right: 0;
-  width: 110rpx;
-  min-height: 120rpx;
-  padding: 16rpx 0 12rpx;
   border: 2rpx solid rgba(59, 130, 246, 0.3);
   outline: none;
   border-radius: 25rpx;
   background: linear-gradient(140deg, #ffffff 15%, #e8eeff 100%);
-  box-shadow:
-    0 12rpx 24rpx rgba(15, 23, 42, 0.15);
+  box-shadow: 0 12rpx 24rpx rgba(15, 23, 42, 0.15);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  position: relative;
-  overflow: visible;
+  padding: 16rpx 32rpx;
+  min-height: 80rpx;
+  margin-left: auto;
 }
 
-.swipe-hint {
-  display: inline-flex;
+.undo-button:disabled,
+.undo-button.is-disabled {
+  opacity: 0.4;
+  color: #9ca3af;
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.undo-button-content {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 18rpx;
-  padding: 12rpx 26rpx;
-  border-radius: 999rpx;
-  background: rgba(15, 23, 42, 0.04);
+  gap: 4rpx;
+  line-height: 1;
+}
+
+.undo-icon {
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.undo-label {
+  font-size: 22rpx;
   color: #6b7280;
-  font-size: 24rpx;
-  pointer-events: none;
-  animation: swipe-hint-fade 0.3s ease;
+  letter-spacing: 1rpx;
 }
 
-.swipe-hint-text {
-  letter-spacing: 2rpx;
-}
-
-.swipe-hint-arrow {
-  font-size: 30rpx;
-  opacity: 0.85;
-}
-
-.swipe-hint-arrow-left {
-  animation: swipe-arrow-left 1.4s ease-in-out infinite;
-}
-
-.swipe-hint-arrow-right {
-  animation: swipe-arrow-right 1.4s ease-in-out infinite;
-}
-
-@keyframes swipe-arrow-left {
-  0% {
-    transform: translateX(0);
-    opacity: 0.35;
-  }
-  50% {
-    transform: translateX(-18rpx);
-    opacity: 1;
-  }
-  100% {
-    transform: translateX(0);
-    opacity: 0.35;
-  }
-}
-
-@keyframes swipe-arrow-right {
-  0% {
-    transform: translateX(0);
-    opacity: 0.35;
-  }
-  50% {
-    transform: translateX(18rpx);
-    opacity: 1;
-  }
-  100% {
-    transform: translateX(0);
-    opacity: 0.35;
-  }
-}
-
-@keyframes swipe-hint-fade {
-  from {
-    opacity: 0;
-    transform: translateY(6rpx);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 
 .undo-button:disabled,
 .undo-button.is-disabled {
@@ -3204,23 +3129,14 @@ const handleAddMarble = async () => {
 
 .undo-button-content {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 6rpx;
-  line-height: 1;
 }
 
 .undo-label {
-  font-size: 20rpx;
+  font-size: 22rpx;
   color: #6b7280;
   letter-spacing: 1rpx;
-  line-height: 1;
-}
-
-.undo-button::after {
-  content: none;
-  border: none;
 }
 
 .undo-button:disabled .undo-icon,
@@ -3239,28 +3155,40 @@ const handleAddMarble = async () => {
   border-radius: 32rpx;
   padding: 24rpx;
   box-shadow: none;
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
 }
 
-.product-scroll {
-  white-space: nowrap;
-  display: flex;
-  gap: 24rpx;
+.carousel-header {
+  width: 100%;
+  text-align: right;
+}
+
+.carousel-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #111827;
+}
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18rpx;
 }
 
 .product-item {
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12rpx;
-  padding: 12rpx 8rpx;
-  border-radius: 24rpx;
-  min-width: 140rpx;
-  margin-right: 12rpx;
+  gap: 10rpx;
+  padding: 10rpx;
+  border-radius: 20rpx;
+  transition: transform 0.2s ease;
 }
 
-.product-item.active .product-thumb {
-  transform: scale(1.05);
+.product-item.active {
+  transform: translateY(-2rpx);
 }
 
 .product-thumb {
@@ -3271,7 +3199,7 @@ const handleAddMarble = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s ease;
+  background: transparent;
 }
 
 .product-thumb-image {
@@ -3283,39 +3211,8 @@ const handleAddMarble = async () => {
 
 .product-name {
   font-size: 24rpx;
-  color: #9ca3af;
-}
-
-.product-width {
-  font-size: 22rpx;
-  color: #9ca3af;
-}
-
-.carousel-fade {
-  position: absolute;
-  top: 24rpx;
-  bottom: 72rpx;
-  width: 60rpx;
-  pointer-events: none;
-}
-
-.carousel-fade.left {
-  left: 24rpx;
-  background: linear-gradient(90deg, #fff, rgba(255, 255, 255, 0));
-}
-
-.carousel-fade.right {
-  right: 24rpx;
-  background: linear-gradient(270deg, #fff, rgba(255, 255, 255, 0));
-}
-
-.carousel-hint {
-  display: block;
+  color: #374151;
   text-align: center;
-  margin-top: 12rpx;
-  font-size: 22rpx;
-  color: #9ca3af;
-  letter-spacing: 4rpx;
 }
 
 .onboarding-overlay {
