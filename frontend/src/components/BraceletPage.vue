@@ -465,7 +465,7 @@ const viewerSwipeLock = {
 const onboardingSteps = [
   {
     title: '长按珠子可换位置',
-    desc: '按住已添加的珠子约 3 秒，拖到另一颗珠子即可交换顺序'
+    desc: '按住珠子 3 秒后可拖动，与其他珠子交换或扔到空隙做首尾'
   },
   {
     title: '左右滑动空白区域',
@@ -792,6 +792,13 @@ const handleUndo = () => {
     const marbleB = record?.marbleB ? toRaw(record.marbleB) : null
     const result = swapMarbleOrder(marbleA, marbleB)
     success = result.swapped
+  } else if (record?.type === 'move') {
+    const targetMarble = record?.marble ? toRaw(record.marble) : null
+    const originIndex = Number.isInteger(record?.fromIndex) ? record.fromIndex : -1
+    if (targetMarble && originIndex >= 0) {
+      const result = moveMarbleToIndex(targetMarble, originIndex)
+      success = result.moved
+    }
   }
   if (!success) {
     undoStack.value.push(entry)
@@ -1009,6 +1016,10 @@ const longPressPointer = {
   y: 0
 }
 const raycaster = new THREE.Raycaster()
+const pointerPlane = new THREE.Plane()
+const pointerPlaneOrigin = new THREE.Vector3()
+const pointerHitPoint = new THREE.Vector3()
+const pointerRelative = new THREE.Vector3()
 let pointerTeardown = null
 
 const cancelLongPressTimer = () => {
@@ -1365,7 +1376,111 @@ const reorderState = {
   active: false,
   marble: null,
   target: null,
-  sourceIndex: -1
+  sourceIndex: -1,
+  insertIndex: -1
+}
+
+const getMarbleDiameter = (marble) =>
+  marble?.userData?.bounds?.diameter || marbleBounds.diameter || 0.004
+
+const getBraceletRadius = () => Math.max(ringConfig.radius, 0.001)
+
+const computeBraceletArcUsage = () => {
+  const radius = getBraceletRadius()
+  return marbleInstances.reduce((arc, marble) => {
+    const width =
+      typeof marble?.userData?.arcWidth === 'number'
+        ? marble.userData.arcWidth
+        : arcWidthFromDiameter(getMarbleDiameter(marble), radius)
+    return arc + width
+  }, 0)
+}
+
+const buildPlacementFromArc = (startAngle, arcWidth, diameter) => {
+  if (!Number.isFinite(startAngle) || !Number.isFinite(arcWidth)) return null
+  const [axisA, axisB] = ringOrientation.planeAxes
+  const normalAxis = ringOrientation.normalAxis
+  const axisVecA = axisVectors[axisA]
+  const axisVecB = axisVectors[axisB]
+  const normalVec = axisVectors[normalAxis]
+  const radialOffset = (ringConfig.bandThickness || 0) / 2
+  const effectiveRadius = Math.max(ringConfig.radius + radialOffset, diameter / 2 || 0.002)
+  const angle = startAngle + arcWidth / 2
+  const position = new THREE.Vector3()
+  position.addScaledVector(axisVecA, Math.cos(angle) * effectiveRadius)
+  position.addScaledVector(axisVecB, Math.sin(angle) * effectiveRadius)
+  position.addScaledVector(normalVec, ringConfig.offsetZ)
+  return {
+    position,
+    angle,
+    startAngle,
+    endAngle: startAngle + arcWidth,
+    arcWidth
+  }
+}
+
+const computeNewMarblePlacement = (diameter) => {
+  const radius = getBraceletRadius()
+  const arcWidth = arcWidthFromDiameter(diameter, radius)
+  const usedArc = computeBraceletArcUsage()
+  const maxArc = Math.PI * 2
+  if (usedArc + arcWidth > maxArc) {
+    return null
+  }
+  return buildPlacementFromArc(usedArc, arcWidth, diameter)
+}
+
+const getPointerRingIntersection = () => {
+  if (!camera) return null
+  const normalAxis = ringOrientation.normalAxis
+  const normalVector = axisVectors[normalAxis]
+  if (!normalVector) return null
+  pointerPlaneOrigin.copy(normalVector).multiplyScalar(ringConfig.offsetZ)
+  pointerPlane.setFromNormalAndCoplanarPoint(normalVector, pointerPlaneOrigin)
+  raycaster.setFromCamera(pointer, camera)
+  const hit = raycaster.ray.intersectPlane(pointerPlane, pointerHitPoint)
+  if (!hit) return null
+  return pointerHitPoint
+}
+
+const determineEdgeInsertionIndex = (angle) => {
+  if (!marbleInstances.length) return -1
+  const totalArc = computeBraceletArcUsage()
+  const remainingGap = Math.max(Math.PI * 2 - totalArc, 0)
+  if (remainingGap <= 0.0001) {
+    return -1
+  }
+  const threshold = Math.min(Math.max(remainingGap * 0.45, 0.2), Math.PI / 2)
+  const distanceToStart = Math.min(angle, Math.abs(Math.PI * 2 - angle))
+  if (distanceToStart <= threshold) {
+    return 0
+  }
+  if (angle >= totalArc) {
+    const distanceToEnd = angle - totalArc
+    if (distanceToEnd <= threshold) {
+      return marbleInstances.length
+    }
+  }
+  return -1
+}
+
+const computePointerInsertionIndex = () => {
+  const intersection = getPointerRingIntersection()
+  if (!intersection) return -1
+  const normalAxis = ringOrientation.normalAxis
+  const normalVector = axisVectors[normalAxis]
+  const [axisA, axisB] = ringOrientation.planeAxes
+  const axisVecA = axisVectors[axisA]
+  const axisVecB = axisVectors[axisB]
+  if (!normalVector || !axisVecA || !axisVecB) return -1
+  pointerRelative.copy(intersection).sub(pointerPlaneOrigin)
+  const coordA = pointerRelative.dot(axisVecA)
+  const coordB = pointerRelative.dot(axisVecB)
+  let angle = Math.atan2(coordB, coordA)
+  if (angle < 0) {
+    angle += Math.PI * 2
+  }
+  return determineEdgeInsertionIndex(angle)
 }
 
 const resetReorderState = () => {
@@ -1373,6 +1488,7 @@ const resetReorderState = () => {
   reorderState.marble = null
   reorderState.target = null
   reorderState.sourceIndex = -1
+  reorderState.insertIndex = -1
   enableOrbitControls()
 }
 
@@ -1384,11 +1500,12 @@ const beginMarbleSwapSession = (marble) => {
   reorderState.marble = marble
   reorderState.target = null
   reorderState.sourceIndex = index
+  reorderState.insertIndex = -1
   disableOrbitControls()
   longPressPointer.active = false
   if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
     uni.showToast({
-      title: '拖动到另一颗珠子可交换位置',
+      title: '拖到珠子交换，拖到空隙可改首尾',
       icon: 'none'
     })
   } else {
@@ -1400,6 +1517,11 @@ const updateReorderTargetFromPointer = () => {
   if (!reorderState.active) return null
   const hovered = selectMarbleByPointer()
   reorderState.target = hovered && hovered !== reorderState.marble ? hovered : null
+  if (reorderState.target) {
+    reorderState.insertIndex = -1
+  } else {
+    reorderState.insertIndex = computePointerInsertionIndex()
+  }
   return reorderState.target
 }
 
@@ -1425,21 +1547,60 @@ const swapMarbleOrder = (first, second) => {
   return { swapped: true, indexA, indexB }
 }
 
+const moveMarbleToIndex = (marble, targetIndex) => {
+  if (!marble || !Number.isInteger(targetIndex)) {
+    return { moved: false, fromIndex: -1, toIndex: -1 }
+  }
+  const fromIndex = marbleInstances.indexOf(marble)
+  if (fromIndex === -1) {
+    return { moved: false, fromIndex, toIndex: -1 }
+  }
+  const boundedTarget = Math.min(Math.max(targetIndex, 0), marbleInstances.length)
+  if (fromIndex === boundedTarget || fromIndex === boundedTarget - 1) {
+    return { moved: false, fromIndex, toIndex: boundedTarget }
+  }
+  const [removed] = marbleInstances.splice(fromIndex, 1)
+  let insertIndex = boundedTarget
+  if (boundedTarget > fromIndex) {
+    insertIndex = boundedTarget - 1
+  }
+  marbleInstances.splice(insertIndex, 0, removed)
+  reflowMarbles()
+  return { moved: true, fromIndex, toIndex: insertIndex }
+}
+
 const completeMarbleSwap = () => {
   if (!reorderState.active) return false
   const source = reorderState.marble
   const target = reorderState.target
+  const insertIndex = reorderState.insertIndex
   resetReorderState()
-  const { swapped, indexA, indexB } = swapMarbleOrder(source, target)
-  if (!swapped) return false
-  pushUndoEntry({ type: 'swap', marbleA: source, marbleB: target, indexA, indexB })
+  if (target) {
+    const { swapped, indexA, indexB } = swapMarbleOrder(source, target)
+    if (!swapped) return false
+    pushUndoEntry({ type: 'swap', marbleA: source, marbleB: target, indexA, indexB })
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '已交换位置',
+        icon: 'none'
+      })
+    } else {
+      console.info('Swapped marble positions')
+    }
+    return true
+  }
+  if (insertIndex < 0) return false
+  const movingToStart = insertIndex === 0
+  const { moved, fromIndex, toIndex } = moveMarbleToIndex(source, insertIndex)
+  if (!moved) return false
+  pushUndoEntry({ type: 'move', marble: source, fromIndex, toIndex })
   if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
     uni.showToast({
-      title: '已交换位置',
+      title: movingToStart ? '已移动到开头' : '已移动到末尾',
       icon: 'none'
     })
   } else {
-    console.info('Swapped marble positions')
+    console.info('Moved marble to new position')
   }
   return true
 }
@@ -1770,13 +1931,35 @@ const loadMarbleTemplate = (glbPath) => {
 
 const reflowMarbles = () => {
   if (!scene || !marbleInstances.length) return
-  marbleInstances.forEach((marble, index) => {
-    const diameter = marble.userData.bounds?.diameter || marbleBounds.diameter || 0.004
-    const position = computeMarblePosition(index, diameter)
-    if (!position) return
+  const radius = getBraceletRadius()
+  const [axisA, axisB] = ringOrientation.planeAxes
+  const normalAxis = ringOrientation.normalAxis
+  const axisVecA = axisVectors[axisA]
+  const axisVecB = axisVectors[axisB]
+  const normalVec = axisVectors[normalAxis]
+  if (!axisVecA || !axisVecB || !normalVec) return
+  const radialOffset = (ringConfig.bandThickness || 0) / 2
+  const position = new THREE.Vector3()
+  const maxArc = Math.PI * 2
+  let accumulatedArc = 0
+  marbleInstances.forEach((marble) => {
+    const diameter = getMarbleDiameter(marble)
+    const arcWidth = arcWidthFromDiameter(diameter, radius)
+    if (accumulatedArc + arcWidth > maxArc) return
+    const angle = accumulatedArc + arcWidth / 2
+    const effectiveRadius = Math.max(ringConfig.radius + radialOffset, diameter / 2 || 0.002)
+    position.set(0, 0, 0)
+    position.addScaledVector(axisVecA, Math.cos(angle) * effectiveRadius)
+    position.addScaledVector(axisVecB, Math.sin(angle) * effectiveRadius)
+    position.addScaledVector(normalVec, ringConfig.offsetZ)
+    marble.userData.currentAngle = angle
+    marble.userData.arcWidth = arcWidth
+    marble.userData.arcStart = accumulatedArc
+    marble.userData.arcEnd = accumulatedArc + arcWidth
     const rotationConfig =
       marble.userData.rotationConfig || { rotation: DEFAULT_FACE_ROTATION, axis: 'radial' }
     orientMarble(marble, position, rotationConfig)
+    accumulatedArc += arcWidth
   })
 }
 
@@ -1785,37 +1968,6 @@ const arcWidthFromDiameter = (diameter, radius) => {
   const effectiveDiameter = safeDiameter * 1
   const ratio = Math.min(Math.max(effectiveDiameter / (2 * radius), 0), 1)
   return ratio > 0 ? 2 * Math.asin(ratio) : 0
-}
-
-const computeMarblePosition = (index, diameterOverride) => {
-  const radius = Math.max(ringConfig.radius, 0.001)
-  const maxArc = Math.PI * 2
-  let accumulatedArc = 0
-  for (let i = 0; i <= index; i++) {
-    const isTarget = i === index
-    const targetMarble = marbleInstances[i]
-    const diameter = isTarget
-      ? diameterOverride
-      : targetMarble?.userData?.bounds?.diameter ?? marbleBounds.diameter ?? 0.004
-    const arcWidth = arcWidthFromDiameter(diameter, radius)
-    if (isTarget) {
-      if (accumulatedArc + arcWidth > maxArc) {
-        return null
-      }
-      const angle = accumulatedArc + arcWidth / 2
-      const [axisA, axisB] = ringOrientation.planeAxes
-      const normalAxis = ringOrientation.normalAxis
-      const radialOffset = (ringConfig.bandThickness || 0) / 2
-      const effectiveRadius = Math.max(ringConfig.radius + radialOffset, diameter / 2 || 0.002)
-      const position = new THREE.Vector3()
-      position.addScaledVector(axisVectors[axisA], Math.cos(angle) * effectiveRadius)
-      position.addScaledVector(axisVectors[axisB], Math.sin(angle) * effectiveRadius)
-      position.addScaledVector(axisVectors[normalAxis], ringConfig.offsetZ)
-      return position
-    }
-    accumulatedArc += arcWidth
-  }
-  return null
 }
 
 watch(
@@ -1968,8 +2120,8 @@ const handleAddMarble = async () => {
       updateGlobalBounds(bounds)
     }
     const diameterForPlacement = bounds?.diameter || marbleBounds.diameter || 0.004
-    const position = computeMarblePosition(marbleInstances.length, diameterForPlacement)
-    if (!position) {
+    const placement = computeNewMarblePlacement(diameterForPlacement)
+    if (!placement) {
       marbleLimit.value = marbleCount.value
       throw new Error('弹珠数量超出一圈容量')
     }
@@ -1978,7 +2130,11 @@ const handleAddMarble = async () => {
       axis: activeProductRotationAxis.value
     }
     marble.userData.rotationConfig = rotationConfig
-    orientMarble(marble, position, rotationConfig)
+    marble.userData.currentAngle = placement.angle
+    marble.userData.arcStart = placement.startAngle
+    marble.userData.arcEnd = placement.endAngle
+    marble.userData.arcWidth = placement.arcWidth
+    orientMarble(marble, placement.position, rotationConfig)
     scene.add(marble)
     marbleInstances.push(marble)
     marbleCount.value = marbleInstances.length
