@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: '定制手串 (Next)',
-  description: '基于 Next.js 的三维手串定制 H5'
+  title: '7*8手串',
+  description: ''
 }
 
 export default function RootLayout({

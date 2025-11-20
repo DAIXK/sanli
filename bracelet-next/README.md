@@ -43,13 +43,40 @@ npm run dev          # 本机 localhost 访问
 ```
 bracelet-next/
 ├─ app/                # Next App Router 入口
-├─ components/         # Next 外壳组件，当前以内嵌 iframe 的方式加载 H5
+├─ components/         # Next 外壳组件+管理后台
 ├─ public/
 │  ├─ assets/          # uni-app 打包出来的静态资源
 │  ├─ static/          # 3D 模型、纹理等
 │  └─ h5/              # index.html 以及辅助资源
 ├─ scripts/sync-h5.mjs # 资源同步脚本
-└─ src/                # 预留，后续可逐步改写为纯 Next 组件
+└─ src/                # 业务逻辑、Supabase 接入
 ```
 
 未来如需逐步用 React/Next 重写页面，可在 `src/` 与 `components/` 中实现新的 UI，然后替换掉当前 iframe 壳即可。
+
+## Supabase 与环境变量
+
+1. 在 Supabase 控制台创建项目，并建立以下表：
+   - `admin_users(id uuid primary key, email text unique, name text, password_hash text)`
+   - `materials(id uuid primary key default uuid_generate_v4(), name text, category text, price numeric, weight numeric, max_quantity int, published boolean default true, model_url text, thumbnail_url text, rotation numeric, rotation_axis text, metadata jsonb)`
+   - `bracelets(id uuid primary key default uuid_generate_v4(), name text, max_beads int, base_model text, description text)`
+   - `global_settings(id int primary key default 1, gold_price_per_gram numeric, processing_fee numeric, currency text)`
+2. 对 `admin_users.password_hash` 使用 `bcrypt` 保存哈希（例如 `bcryptjs.hash(password, 10)`）。
+3. 在项目根目录新增 `.env.local`，内容可参考 `.env.local.example`：
+   ```
+   SUPABASE_URL=<project url>
+   SUPABASE_ANON_KEY=<anon public key，用于公开读取>
+   SUPABASE_SERVICE_ROLE_KEY=<service role key，仅服务端可见>
+   JWT_SECRET=<任意长度足够的随机字符串>
+   ```
+4. Vercel 部署时，在 Dashboard > Settings > Environment Variables 中配置同样的键值。
+
+## 管理后台 (Supabase + JWT)
+
+- 访问 `/admin/login` 输入 `admin_users` 中的邮箱/密码即可登录，系统会基于 `JWT_SECRET` 颁发 7 天有效的 HTTP-only JWT。
+- 登录后进入 `/admin` 仪表盘，可以完成：
+  1. **全局设置**：修改实时金价、加工费。
+  2. **手串款式**：维护每种手串的最大可添加颗数、背景模型等信息。
+  3. **珠子库**：新增/编辑/上下架 tongzhu / yaopian 等素材，设置重量、价格、模型地址、默认旋转等。
+- 所有写操作都经由 `app/api/admin/*` API，并使用 Supabase Service Role Key 与数据库交互；未登录的请求会返回 401。
+- 前台可通过 `/api/materials` 获取已上架的珠子与全局配置，供 H5/小程序加载。

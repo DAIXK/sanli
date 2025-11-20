@@ -1,0 +1,12 @@
+const requireEnv = (key: string): string => {
+  const value = process.env[key]
+  if (!value) {
+    throw new Error(`Missing environment variable: ${key}`)
+  }
+  return value
+}
+
+export const getSupabaseUrl = () => requireEnv('SUPABASE_URL')
+export const getSupabaseAnonKey = () => requireEnv('SUPABASE_ANON_KEY')
+export const getSupabaseServiceKey = () => requireEnv('SUPABASE_SERVICE_ROLE_KEY')
+export const getJwtSecret = () => requireEnv('JWT_SECRET')

@@ -1,6 +1,6 @@
 import dynamic from 'next/dynamic'
 
-const BraceletApp = dynamic(() => import('../components/BraceletApp'), {
+const BraceletApp = dynamic(() => import('@/components/BraceletApp'), {
   ssr: false,
   loading: () => <div style={{ padding: 32 }}>加载中...</div>
 })

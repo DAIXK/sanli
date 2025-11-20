@@ -42,18 +42,19 @@
 
 
     <view class="selector-row">
+       <view class="selector-field">
+        <text class="selector-label">购买前必看</text>
+        <view class="selector-control bead-guide-trigger" @tap="openBeadGuideDrawer">
+          <view class="selector-value">点我</view>
+        </view>
+      </view>
       <view class="selector-field">
         <text class="selector-label">手围约</text>
         <view class="selector-control selector-control-static">
           <view class="selector-value" style="padding: 10rpx 8rpx;">{{ formattedRingLength }}</view>
         </view>
       </view>
-      <view class="selector-field">
-        <text class="selector-label">购买前必看</text>
-        <view class="selector-control bead-guide-trigger" @tap="openBeadGuideDrawer">
-          <view class="selector-value">点我</view>
-        </view>
-      </view>
+     
     </view>
 
     <view class="viewer-card">
@@ -208,7 +209,7 @@ const props = defineProps({
   },
   defaultTitle: {
     type: String,
-    default: '定制手串'
+    default: '7*8手串'
   },
   swipeRoutes: {
     type: Object,
@@ -241,6 +242,7 @@ const materialConfig = ref({})
 const price = ref(0)
 const accessoryPrice = ref(0)
 const goldWeight = ref(0)
+const goldPricePerGram = ref(null)
 const formatCurrencyText = (value) => {
   const numeric = Number(value)
   if (!Number.isFinite(numeric) || numeric <= 0) {
@@ -263,6 +265,7 @@ const hasGoldWeightInfo = computed(() => {
   return Number.isFinite(numeric) && numeric > 0
 })
 const hasAccessoryPrice = computed(() => Number(accessoryPrice.value) > 0)
+const formattedGoldPrice = computed(() => formatCurrencyText(goldPricePerGram.value))
 const priceSubtitleText = computed(() => {
   const segments = []
   if (hasAccessoryPrice.value) {
@@ -270,6 +273,9 @@ const priceSubtitleText = computed(() => {
   }
   if (hasGoldWeightInfo.value) {
     segments.push(`金约${formattedGoldWeight.value}克`)
+  }
+  if (formattedGoldPrice.value && formattedGoldPrice.value !== '-') {
+    segments.push(`金价¥${formattedGoldPrice.value}/克`)
   }
   return segments.join('，')
 })
@@ -313,6 +319,24 @@ const loadMaterials = async () => {
         icon: 'none'
       })
     }
+  }
+}
+
+const loadGlobalSettings = async () => {
+  if (typeof fetch !== 'function') return
+  try {
+    const response = await fetch('/api/materials', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    if (!response.ok) return
+    const payload = await response.json().catch(() => null)
+    const price = Number(payload?.settings?.gold_price_per_gram)
+    if (Number.isFinite(price) && price > 0) {
+      goldPricePerGram.value = price
+    }
+  } catch (error) {
+    console.warn('获取金价失败', error)
   }
 }
 
@@ -578,7 +602,6 @@ const dismissOnboarding = () => {
   showOnboarding.value = false
   recordOnboardingSeen()
   onboardingStep.value = 0
-  handleSwipeHintAcknowledge()
 }
 const handleOnboardingAction = () => {
   const nextStep = onboardingStep.value + 1
@@ -1311,6 +1334,15 @@ const ringOrientation = {
 const defaultPageTitle = computed(() => props.defaultTitle || '定制手串')
 const pageTitle = ref(defaultPageTitle.value)
 const showH5Title = isH5
+const notifyParentTitle = (title) => {
+  if (typeof window === 'undefined') return
+  if (!window.parent || window.parent === window) return
+  try {
+    window.parent.postMessage({ type: 'bracelet:title', title }, '*')
+  } catch (error) {
+    console.warn('父窗口标题通信失败', error)
+  }
+}
 const applyPageTitle = (title) => {
   const finalTitle = title || defaultPageTitle.value
   if (typeof document !== 'undefined') {
@@ -1323,6 +1355,7 @@ const applyPageTitle = (title) => {
       console.warn('Failed to set navigation title', error)
     }
   }
+  notifyParentTitle(finalTitle)
 }
 watch(
   pageTitle,
@@ -2440,6 +2473,7 @@ const disposeScene = () => {
 }
 
 onMounted(async () => {
+  loadGlobalSettings()
   loadingText.value = '素材加载中...'
   await loadMaterials()
   if (!braceletTypes.value.length) {
