@@ -141,6 +141,25 @@ const ModelViewerPage = () => {
               diyRoot.scale.set(100, 100, 100);
 
               ropeBone.add(diyRoot);
+
+              // 根据原 RopeMesh 的包围盒自动匹配圈径（取最大维度的比例）
+              if (ropeMesh) {
+                ropeBone.updateMatrixWorld(true);
+                diyRoot.updateMatrixWorld(true);
+                const ropeBox = new THREE.Box3().setFromObject(ropeMesh);
+                const diyBox = new THREE.Box3().setFromObject(diyRoot);
+                const ropeSize = ropeBox.getSize(new THREE.Vector3());
+                const diySize = diyBox.getSize(new THREE.Vector3());
+                const ropeMax = Math.max(ropeSize.x, ropeSize.y, ropeSize.z);
+                const diyMax = Math.max(diySize.x, diySize.y, diySize.z);
+                if (diyMax > 0) {
+                  const fitScale = ropeMax / diyMax;
+                  diyRoot.scale.multiplyScalar(fitScale);
+                  diyRoot.updateMatrixWorld(true);
+                  console.log('Auto scale DIY to match RopeMesh. ratio:', fitScale);
+                }
+              }
+
               console.log('DIY bracelet attached to rope bone at', ropeBone.getWorldPosition(new THREE.Vector3()));
             },
             undefined,
