@@ -82,6 +82,55 @@ const ModelViewerPage = () => {
           const action = mixer.clipAction(gltf.animations[0]);
           setAnimationAction(action);
         }
+
+        // Attach DIY bracelet as a child of the rope bone so it follows the animation.
+        const ropeBone = model.getObjectByName('rope');
+        if (ropeBone) {
+          const diyLoader = new GLTFLoader();
+          diyLoader.load(
+            '/static/diy.gltf',
+            (diyGltf) => {
+              const diyRoot = new THREE.Group();
+              diyRoot.name = 'DIYBraceletAttachment';
+
+              // Reset diy scene transform before parenting.
+              diyGltf.scene.position.set(0, 0, 0);
+              diyGltf.scene.rotation.set(0, 0, 0);
+              diyGltf.scene.scale.set(1, 1, 1);
+
+              // Ensure matte look: force materials to be non-metallic and rough.
+              diyGltf.scene.traverse((obj) => {
+                if ((obj as THREE.Mesh).isMesh) {
+                  const mesh = obj as THREE.Mesh;
+                  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                  materials.forEach((mat) => {
+                    if ('metalness' in mat && 'roughness' in mat) {
+                      mat.metalness = 0;
+                      mat.roughness = 1;
+                      mat.needsUpdate = true;
+                    }
+                  });
+                }
+              });
+
+              diyRoot.add(diyGltf.scene);
+
+              // Start with a larger scale to make it visible; tweak these to fit.
+              diyRoot.position.set(0, 0, 0);
+              diyRoot.rotation.set(0, 0, 0);
+              diyRoot.scale.set(100, 100, 100);
+
+              ropeBone.add(diyRoot);
+              console.log('DIY bracelet attached to rope bone at', ropeBone.getWorldPosition(new THREE.Vector3()));
+            },
+            undefined,
+            (error) => {
+              console.error('Failed to load DIY bracelet glTF:', error);
+            }
+          );
+        } else {
+          console.warn('rope bone not found; DIY bracelet not attached');
+        }
       },
       (xhr) => {
         setLoadingProgress((xhr.loaded / xhr.total) * 100);

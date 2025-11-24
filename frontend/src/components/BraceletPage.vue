@@ -28,6 +28,14 @@
       >
         生成视频
       </button>
+      <button
+        class="ghost-button ghost-button--secondary"
+        :class="{ 'is-disabled': !canExportModel || modelExporting }"
+        :disabled="!canExportModel || modelExporting"
+        @tap="handleExportModel"
+      >
+        {{ modelExporting ? '导出中…' : '导出模型' }}
+      </button>
       <!-- <button
         class="ghost-button ghost-button--secondary"
         :class="{ 'is-disabled': !canGenerateVideo || animationRecording }"
@@ -199,6 +207,7 @@ import {
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 //可按 “radial/tangent/normal” 三种轴向做世界坐标旋转
 
@@ -553,6 +562,10 @@ const layoutVersion = ref(0)
 const sceneReady = ref(false)
 const marbleLimit = ref(Infinity)
 const canGenerateVideo = computed(() => marbleCount.value > 0)
+const modelExporting = ref(false)
+const canExportModel = computed(
+  () => sceneReady.value && marbleCount.value > 0 && !!ringRoot
+)
 const deleteZone = reactive({
   visible: false,
   hovered: false
@@ -1012,6 +1025,140 @@ const handleGenerateVideo = () => {
   }
 
   console.info('Generate video triggered', message)
+}
+
+const sanitizeFileName = (text) => {
+  if (!text || typeof text !== 'string') return 'bracelet'
+  const trimmed = text.trim()
+  if (!trimmed) return 'bracelet'
+  return trimmed.replace(/[\\/:*?"<>|]+/g, '-').slice(0, 64)
+}
+
+const buildExportFileName = () => {
+  const baseName = sanitizeFileName(activeBraceletName.value || 'bracelet')
+  return `${baseName}-diy-${Date.now()}.glb`
+}
+
+const cloneObjectTree = (object, name = '') => {
+  if (!object) return null
+  object.updateWorldMatrix?.(true, true)
+  const cloned = object.clone(true)
+  cloned.name = name || object.name || ''
+  cloned.traverse((child) => {
+    child.matrixAutoUpdate = false
+    child.updateMatrix()
+  })
+  return cloned
+}
+
+const buildBraceletExportRoot = () => {
+  if (!ringRoot || !marbleInstances.length) return null
+  const wrapper = new THREE.Group()
+  wrapper.name = 'DIYBracelet'
+  const ringClone = cloneObjectTree(ringRoot, 'BraceletBase')
+  if (ringClone) {
+    wrapper.add(ringClone)
+  }
+  marbleInstances.forEach((marble, index) => {
+    const clone = cloneObjectTree(marble, `Bead_${index + 1}`)
+    if (clone) {
+      wrapper.add(clone)
+    }
+  })
+  return wrapper
+}
+
+const exportBraceletModel = () =>
+  new Promise((resolve, reject) => {
+    const exportRoot = buildBraceletExportRoot()
+    if (!exportRoot) {
+      reject(new Error('当前手串未准备好，无法导出'))
+      return
+    }
+    const exporter = new GLTFExporter()
+    exporter.parse(
+      exportRoot,
+      (result) => {
+        try {
+          if (result instanceof ArrayBuffer) {
+            resolve(new Blob([result], { type: 'model/gltf-binary' }))
+            return
+          }
+          const json = typeof result === 'string' ? result : JSON.stringify(result)
+          resolve(new Blob([json], { type: 'model/gltf+json' }))
+        } catch (error) {
+          reject(error)
+        }
+      },
+      (error) => reject(error),
+      { binary: true, onlyVisible: true, embedImages: true }
+    )
+  })
+
+const downloadBlob = (blob, filename) => {
+  if (!isH5 || !blob) return false
+  try {
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    return true
+  } catch (error) {
+    console.warn('下载模型失败', error)
+    return false
+  }
+}
+
+const handleExportModel = async () => {
+  if (modelExporting.value) return
+  if (!canExportModel.value) {
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '请先完成珠子选择',
+        icon: 'none'
+      })
+    }
+    return
+  }
+  if (!isH5) {
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '请在 H5 端导出模型',
+        icon: 'none'
+      })
+    }
+    return
+  }
+  modelExporting.value = true
+  try {
+    const blob = await exportBraceletModel()
+    const fileName = buildExportFileName()
+    const downloaded = downloadBlob(blob, fileName)
+    if (!downloaded) {
+      throw new Error('无法触发下载')
+    }
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '已导出模型',
+        icon: 'none'
+      })
+    }
+  } catch (error) {
+    console.error('导出模型失败', error)
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '导出失败，请重试',
+        icon: 'none'
+      })
+    }
+  } finally {
+    modelExporting.value = false
+  }
 }
 
 const handleGenerateAnimation = async () => {
