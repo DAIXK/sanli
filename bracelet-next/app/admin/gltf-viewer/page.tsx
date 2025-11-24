@@ -137,9 +137,9 @@ const ModelViewerPage = () => {
               } 
 
               // 放大 100x 抵消 Armature 的 0.01 缩放，可按需微调位置/缩放。
-              diyRoot.position.set(0, 0, 0);
+              diyRoot.position.set(0.8, 0, 0);
               diyRoot.scale.set(100, 100, 100);
-              const nonUniformScale = new THREE.Vector3(1.05, 1.35, 1.05);
+              const nonUniformScale = new THREE.Vector3(1.05, 1.15, 1.05);
               diyRoot.scale.multiply(nonUniformScale);
               // 抵消非均匀缩放对珠子形状的影响
               const inverseScale = new THREE.Vector3(
