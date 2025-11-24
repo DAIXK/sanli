@@ -4,6 +4,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 const ModelViewerPage = () => {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -29,7 +30,13 @@ const ModelViewerPage = () => {
     // Correct color space and tone mapping for PBR materials
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
     mountRef.current.appendChild(renderer.domElement);
+
+    // 环境光贴图，避免材质因缺少反射而显得失真
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    const envMap = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = envMap;
 
     // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -101,21 +108,6 @@ const ModelViewerPage = () => {
               diyGltf.scene.position.set(0, 0, 0);
               diyGltf.scene.rotation.set(0, 0, 0);
               diyGltf.scene.scale.set(1, 1, 1);
-
-              // Ensure matte look: force materials to be non-metallic and rough.
-              diyGltf.scene.traverse((obj) => {
-                if ((obj as THREE.Mesh).isMesh) {
-                  const mesh = obj as THREE.Mesh;
-                  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-                  materials.forEach((mat) => {
-                    if ('metalness' in mat && 'roughness' in mat) {
-                      mat.metalness = 0;
-                      mat.roughness = 1;
-                      mat.needsUpdate = true;
-                    }
-                  });
-                }
-              });
 
               diyRoot.add(diyGltf.scene);
 
