@@ -85,6 +85,7 @@ const ModelViewerPage = () => {
 
         // Attach DIY bracelet as a child of the rope bone so it follows the animation.
         const ropeBone = model.getObjectByName('rope');
+        const ropeMesh = model.getObjectByName('RopeMesh'); // 用于参考原手串的朝向
         if (ropeBone) {
           const diyLoader = new GLTFLoader();
           diyLoader.load(
@@ -115,9 +116,25 @@ const ModelViewerPage = () => {
 
               diyRoot.add(diyGltf.scene);
 
-              // Start with a larger scale to make it visible; tweak these to fit.
+              // 对齐朝向：DIY 的局部旋转 = inverse(boneWorld) * ropeMeshWorld
+              ropeBone.updateMatrixWorld(true);
+              ropeMesh?.updateMatrixWorld(true);
+              const boneWorldQuat = ropeBone.getWorldQuaternion(new THREE.Quaternion());
+              const targetQuat = ropeMesh?.getWorldQuaternion(new THREE.Quaternion());
+              if (targetQuat) {
+                const localQuat = boneWorldQuat.clone().invert().multiply(targetQuat);
+                diyRoot.quaternion.copy(localQuat);
+                diyRoot.rotation.x += 0.2;
+                diyRoot.rotation.y -= 0.48;
+                diyRoot.rotation.z -= 0.4;
+                diyRoot.rotateY(0.1);
+                diyRoot.rotateX(-0.2);
+                // diyRoot.rotateZ(0.5);
+                
+              } 
+
+              // 放大 100x 抵消 Armature 的 0.01 缩放，可按需微调位置/缩放。
               diyRoot.position.set(0, 0, 0);
-              diyRoot.rotation.set(0, 0, 0);
               diyRoot.scale.set(100, 100, 100);
 
               ropeBone.add(diyRoot);
