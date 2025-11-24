@@ -139,6 +139,7 @@ const ModelViewerPage = () => {
               // 放大 100x 抵消 Armature 的 0.01 缩放，可按需微调位置/缩放。
               diyRoot.position.set(0, 0, 0);
               diyRoot.scale.set(100, 100, 100);
+              diyRoot.scale.multiply(new THREE.Vector3(1.05, 1.35, 1.05));
 
               ropeBone.add(diyRoot);
 
