@@ -86,6 +86,9 @@ const ModelViewerPage = () => {
         // Attach DIY bracelet as a child of the rope bone so it follows the animation.
         const ropeBone = model.getObjectByName('rope');
         const ropeMesh = model.getObjectByName('RopeMesh'); // 用于参考原手串的朝向
+        if (ropeMesh) {
+          ropeMesh.visible = false; // 隐藏原有手串
+        }
         if (ropeBone) {
           const diyLoader = new GLTFLoader();
           diyLoader.load(
@@ -129,7 +132,7 @@ const ModelViewerPage = () => {
                 diyRoot.rotation.z -= 0.4;
                 diyRoot.rotateY(0.1);
                 diyRoot.rotateX(-0.2);
-                // diyRoot.rotateZ(0.5);
+               
                 
               } 
 
