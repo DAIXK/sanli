@@ -74,13 +74,13 @@ const ModelViewerPage = () => {
         //== 这里控制模型的默认位置、旋转和缩放
         //================================================================
         // model.position.set(x, y, z);
-        model.position.set(3.2, 1.2, 0); // 举例：将模型沿Y轴向上移动1个单位
+        model.position.set(3.4, 1.4, 0); // 举例：将模型沿Y轴向上移动1个单位
 
         model.rotation.set(1, 1, 1); // (in radians)
         // model.rotation.y = Math.PI; // 举例：将模型沿Y轴旋转180度
 
         // model.scale.set(size, size, size);
-        model.scale.set(4.2, 4.2, 4.2); // 举例：将模型缩小到原来的一半
+        model.scale.set(4.5, 4.5, 4.5); // 举例：将模型缩小到原来的一半
         //================================================================
 
         scene.add(model);
