@@ -19,6 +19,12 @@ const ModelViewerPage = () => {
     // Scene
     const scene = new THREE.Scene();
 
+    // Background texture
+    const bgTexture = new THREE.TextureLoader().load('/static/background.png', (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+    });
+    scene.background = bgTexture;
+
     // Camera
     const camera = new THREE.PerspectiveCamera(75, mountRef.current.clientWidth / mountRef.current.clientHeight, 0.1, 1000);
     camera.position.set(2, 2, 5);
@@ -130,7 +136,7 @@ const ModelViewerPage = () => {
               } 
 
               // 放大 100x 抵消 Armature 的 0.01 缩放，可按需微调位置/缩放。
-              diyRoot.position.set(0.5, 0, 0);
+              diyRoot.position.set(0.5, -0.2, 0);
               diyRoot.scale.set(100, 100, 100);
               const nonUniformScale = new THREE.Vector3(1.05, 1.05, 1.05);
               diyRoot.scale.multiply(nonUniformScale);
@@ -269,7 +275,17 @@ const ModelViewerPage = () => {
   };
 
   return (
-    <div style={{ width: '100%', height: 'calc(100vh - 100px)', position: 'relative' }}>
+    <div
+      style={{
+        width: '100vw',
+        height: '100vh',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        margin: 0,
+        padding: 0,
+      }}
+    >
         <div style={{ 
             position: 'absolute', 
             top: 10, 
