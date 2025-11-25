@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getApiAdminSession } from '@/lib/auth'
-import { createSupabaseServiceClient } from '@/lib/supabase'
+import { query } from '@/lib/db'
+import type { MaterialRecord } from '@/types/material'
 
 const rotationAxisEnum = z.enum(['radial', 'tangent', 'normal']).optional().nullable()
 
@@ -32,18 +33,29 @@ export async function PUT(
   if (!parsed.success) {
     return NextResponse.json({ message: '参数错误', issues: parsed.error.format() }, { status: 400 })
   }
-  const supabase = createSupabaseServiceClient()
-  const { data, error } = await supabase
-    .from('materials')
-    .update(parsed.data)
-    .eq('id', params.id)
-    .select()
-    .single()
-  if (error) {
+  const entries = Object.entries(parsed.data).filter(([, value]) => value !== undefined)
+  if (entries.length === 0) {
+    return NextResponse.json({ message: '无可更新内容' }, { status: 400 })
+  }
+  const setClauses = entries.map(([key], index) => `${key} = $${index + 1}`)
+  setClauses.push('updated_at = NOW()')
+  try {
+    const { rows } = await query<MaterialRecord>(
+      `UPDATE materials SET ${setClauses.join(', ')} WHERE id = $${
+        entries.length + 1
+      } RETURNING *`,
+      [...entries.map(([, value]) => value ?? null), params.id]
+    )
+    const updated = rows[0]
+    if (!updated) {
+      console.error('Failed to update material: no rows returned')
+      return NextResponse.json({ message: '更新失败' }, { status: 500 })
+    }
+    return NextResponse.json(updated)
+  } catch (error) {
     console.error('Failed to update material', error)
     return NextResponse.json({ message: '更新失败' }, { status: 500 })
   }
-  return NextResponse.json(data)
 }
 
 export async function DELETE(
@@ -53,11 +65,11 @@ export async function DELETE(
   if (!getApiAdminSession()) {
     return unauthorized()
   }
-  const supabase = createSupabaseServiceClient()
-  const { error } = await supabase.from('materials').delete().eq('id', params.id)
-  if (error) {
+  try {
+    await query('DELETE FROM materials WHERE id = $1', [params.id])
+    return NextResponse.json({ success: true })
+  } catch (error) {
     console.error('Failed to delete material', error)
     return NextResponse.json({ message: '删除失败' }, { status: 500 })
   }
-  return NextResponse.json({ success: true })
 }

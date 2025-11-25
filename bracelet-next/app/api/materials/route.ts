@@ -1,19 +1,19 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseAnonClient } from '@/lib/supabase'
+import { query } from '@/lib/db'
+import type { GlobalSettings, MaterialRecord } from '@/types/material'
 
 export async function GET() {
-  const supabase = createSupabaseAnonClient()
-  const [{ data: materials, error: materialsError }, { data: settings, error: settingsError }] =
-    await Promise.all([
-      supabase.from('materials').select('*').eq('published', true).order('name', { ascending: true }),
-      supabase.from('global_settings').select('*').single()
+  try {
+    const [{ rows: materials }, { rows: settings }] = await Promise.all([
+      query<MaterialRecord>('SELECT * FROM materials WHERE published = true ORDER BY name ASC'),
+      query<GlobalSettings>('SELECT * FROM global_settings LIMIT 1')
     ])
-  if (materialsError || settingsError) {
-    console.error('Failed to load public materials', materialsError || settingsError)
+    return NextResponse.json({
+      materials,
+      settings: settings[0] ?? null
+    })
+  } catch (error) {
+    console.error('Failed to load public materials', error)
     return NextResponse.json({ message: '加载失败' }, { status: 500 })
   }
-  return NextResponse.json({
-    materials: materials ?? [],
-    settings: settings ?? null
-  })
 }

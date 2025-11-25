@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getApiAdminSession } from '@/lib/auth'
-import { createSupabaseServiceClient } from '@/lib/supabase'
+import { query } from '@/lib/db'
+import type { BraceletRecord } from '@/types/material'
 
 const braceletSchema = z.object({
   name: z.string().min(1),
@@ -16,13 +17,13 @@ export async function GET() {
   if (!getApiAdminSession()) {
     return unauthorized()
   }
-  const supabase = createSupabaseServiceClient()
-  const { data, error } = await supabase.from('bracelets').select('*').order('name', { ascending: true })
-  if (error) {
+  try {
+    const { rows } = await query<BraceletRecord>('SELECT * FROM bracelets ORDER BY name ASC')
+    return NextResponse.json(rows)
+  } catch (error) {
     console.error('Failed to load bracelets', error)
     return NextResponse.json({ message: '加载失败' }, { status: 500 })
   }
-  return NextResponse.json(data ?? [])
 }
 
 export async function POST(request: Request) {
@@ -34,11 +35,21 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ message: '参数错误', issues: parsed.error.format() }, { status: 400 })
   }
-  const supabase = createSupabaseServiceClient()
-  const { data, error } = await supabase.from('bracelets').insert(parsed.data).select().single()
-  if (error) {
+  try {
+    const { rows } = await query<BraceletRecord>(
+      `INSERT INTO bracelets (name, max_beads, base_model, description)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [
+        parsed.data.name,
+        parsed.data.max_beads,
+        parsed.data.base_model ?? null,
+        parsed.data.description ?? null
+      ]
+    )
+    return NextResponse.json(rows[0])
+  } catch (error) {
     console.error('Failed to create bracelet', error)
     return NextResponse.json({ message: '创建失败' }, { status: 500 })
   }
-  return NextResponse.json(data)
 }

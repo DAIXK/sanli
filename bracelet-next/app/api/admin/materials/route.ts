@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getApiAdminSession } from '@/lib/auth'
-import { createSupabaseServiceClient } from '@/lib/supabase'
+import { query } from '@/lib/db'
+import type { MaterialRecord } from '@/types/material'
 
 const rotationAxisEnum = z.enum(['radial', 'tangent', 'normal']).optional().nullable()
 
@@ -27,16 +28,15 @@ export async function GET() {
   if (!getApiAdminSession()) {
     return unauthorized()
   }
-  const supabase = createSupabaseServiceClient()
-  const { data, error } = await supabase
-    .from('materials')
-    .select('*')
-    .order('updated_at', { ascending: false })
-  if (error) {
+  try {
+    const { rows } = await query<MaterialRecord>(
+      'SELECT * FROM materials ORDER BY updated_at DESC NULLS LAST'
+    )
+    return NextResponse.json(rows)
+  } catch (error) {
     console.error('Failed to load materials', error)
     return NextResponse.json({ message: '加载失败' }, { status: 500 })
   }
-  return NextResponse.json(data ?? [])
 }
 
 export async function POST(request: Request) {
@@ -48,11 +48,28 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ message: '参数错误', issues: parsed.error.format() }, { status: 400 })
   }
-  const supabase = createSupabaseServiceClient()
-  const { data, error } = await supabase.from('materials').insert(parsed.data).select().single()
-  if (error) {
+  try {
+    const { rows } = await query<MaterialRecord>(
+      `INSERT INTO materials
+        (name, category, weight, price, max_quantity, published, model_url, thumbnail_url, rotation, rotation_axis)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [
+        parsed.data.name,
+        parsed.data.category,
+        parsed.data.weight,
+        parsed.data.price,
+        parsed.data.max_quantity ?? null,
+        parsed.data.published ?? true,
+        parsed.data.model_url,
+        parsed.data.thumbnail_url ?? null,
+        parsed.data.rotation ?? null,
+        parsed.data.rotation_axis ?? null
+      ]
+    )
+    return NextResponse.json(rows[0])
+  } catch (error) {
     console.error('Failed to create material', error)
     return NextResponse.json({ message: '创建失败' }, { status: 500 })
   }
-  return NextResponse.json(data)
 }

@@ -3,34 +3,23 @@ import type {
   MaterialRecord,
   BraceletRecord
 } from '@/types/material'
-import { createSupabaseServiceClient } from './supabase'
+import { query } from './db'
 
 export const fetchMaterials = async (): Promise<MaterialRecord[]> => {
-  const supabase = createSupabaseServiceClient()
-  const { data, error } = await supabase
-    .from('materials')
-    .select('*')
-    .order('updated_at', { ascending: false })
-  if (error) {
-    throw error
-  }
-  return data ?? []
+  const { rows } = await query<MaterialRecord>(
+    'SELECT * FROM materials ORDER BY updated_at DESC NULLS LAST'
+  )
+  return rows
 }
 
 export const fetchGlobalSettings = async (): Promise<GlobalSettings | null> => {
-  const supabase = createSupabaseServiceClient()
-  const { data, error } = await supabase.from('global_settings').select('*').single()
-  if (error && error.code !== 'PGRST116') {
-    throw error
-  }
-  return data ?? null
+  const { rows } = await query<GlobalSettings>('SELECT * FROM global_settings LIMIT 1')
+  return rows[0] ?? null
 }
 
 export const fetchBracelets = async (): Promise<BraceletRecord[]> => {
-  const supabase = createSupabaseServiceClient()
-  const { data, error } = await supabase.from('bracelets').select('*').order('name', { ascending: true })
-  if (error && error.code !== 'PGRST116') {
-    throw error
-  }
-  return data ?? []
+  const { rows } = await query<BraceletRecord>(
+    'SELECT * FROM bracelets ORDER BY name ASC'
+  )
+  return rows
 }

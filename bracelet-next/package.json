@@ -11,13 +11,13 @@
     "sync:h5": "node ./scripts/sync-h5.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.83.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
     "bcryptjs": "^3.0.3",
     "jose": "^6.1.2",
     "jsonwebtoken": "^9.0.2",
     "next": "14.2.3",
+    "pg": "^8.11.5",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "swr": "^2.3.6",
