@@ -62,7 +62,8 @@ const ModelViewerPage = () => {
 
     // GLTF Loader
     const loader = new GLTFLoader();
-    let mixer: THREE.AnimationMixer;
+    let mixer: THREE.AnimationMixer | null = null;
+    let updateBraceletTransform: (() => void) | null = null;
 
     loader.load(
       '/static/models/Human-Arm-Animation.gltf',
@@ -129,9 +130,9 @@ const ModelViewerPage = () => {
               } 
 
               // 放大 100x 抵消 Armature 的 0.01 缩放，可按需微调位置/缩放。
-              diyRoot.position.set(0.8, 0, 0);
+              diyRoot.position.set(0.5, 0, 0);
               diyRoot.scale.set(100, 100, 100);
-              const nonUniformScale = new THREE.Vector3(1.05, 1.15, 1.05);
+              const nonUniformScale = new THREE.Vector3(1.05, 1.05, 1.05);
               diyRoot.scale.multiply(nonUniformScale);
               // 抵消非均匀缩放对珠子形状的影响
               const inverseScale = new THREE.Vector3(
@@ -147,23 +148,48 @@ const ModelViewerPage = () => {
 
               ropeBone.add(diyRoot);
 
-              // 根据原 RopeMesh 的包围盒自动匹配圈径（取最大维度的比例）
+              // 根据 RopeMesh 的包围球自动匹配圈径，可通过 braceletTightness 调整紧度
               if (ropeMesh) {
                 ropeBone.updateMatrixWorld(true);
                 diyRoot.updateMatrixWorld(true);
                 const ropeBox = new THREE.Box3().setFromObject(ropeMesh);
                 const diyBox = new THREE.Box3().setFromObject(diyRoot);
-                const ropeSize = ropeBox.getSize(new THREE.Vector3());
-                const diySize = diyBox.getSize(new THREE.Vector3());
-                const ropeMax = Math.max(ropeSize.x, ropeSize.y, ropeSize.z);
-                const diyMax = Math.max(diySize.x, diySize.y, diySize.z);
-                if (diyMax > 0) {
-                  const fitScale = ropeMax / diyMax;
+                const ropeSphere = ropeBox.getBoundingSphere(new THREE.Sphere());
+                const diySphere = diyBox.getBoundingSphere(new THREE.Sphere());
+                const braceletTightness = 0.8; // <1 稍微收紧，减少悬空；想更贴合可调小一点
+                if (ropeSphere.radius > 0 && diySphere.radius > 0) {
+                  const fitScale = (ropeSphere.radius / diySphere.radius) * braceletTightness;
                   diyRoot.scale.multiplyScalar(fitScale);
                   diyRoot.updateMatrixWorld(true);
-                  console.log('Auto scale DIY to match RopeMesh. ratio:', fitScale);
+                  console.log('Auto scale DIY to match RopeMesh (sphere). ratio:', fitScale);
                 }
               }
+
+              // 锁定手串世界尺寸，抵消骨骼缩放（例如手变肥导致手串变大）
+              const baseLocalPosition = diyRoot.position.clone();
+              const baseLocalScale = diyRoot.scale.clone();
+              const baseParentScale = new THREE.Vector3();
+              const currentParentScale = new THREE.Vector3();
+              const safeParentScale = new THREE.Vector3();
+
+              ropeBone.updateMatrixWorld(true);
+              ropeBone.getWorldScale(baseParentScale);
+
+              updateBraceletTransform = () => {
+                ropeBone.updateMatrixWorld(true);
+                ropeBone.getWorldScale(currentParentScale);
+
+                safeParentScale.set(
+                  Math.abs(currentParentScale.x) < 1e-6 ? 1e-6 : currentParentScale.x,
+                  Math.abs(currentParentScale.y) < 1e-6 ? 1e-6 : currentParentScale.y,
+                  Math.abs(currentParentScale.z) < 1e-6 ? 1e-6 : currentParentScale.z
+                );
+
+                diyRoot.position.copy(baseLocalPosition).multiply(baseParentScale).divide(safeParentScale);
+                diyRoot.scale.copy(baseLocalScale).multiply(baseParentScale).divide(safeParentScale);
+              };
+
+              updateBraceletTransform();
 
               console.log('DIY bracelet attached to rope bone at', ropeBone.getWorldPosition(new THREE.Vector3()));
             },
@@ -191,6 +217,7 @@ const ModelViewerPage = () => {
       requestAnimationFrame(animate);
       const delta = clock.getDelta();
       if (mixer) mixer.update(delta);
+      if (updateBraceletTransform) updateBraceletTransform();
       controls.update();
       renderer.render(scene, camera);
     };
