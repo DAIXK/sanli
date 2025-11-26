@@ -22,13 +22,8 @@ type BeadInstance = {
 
 const ModelViewerPage = () => {
   const mountRef = useRef<HTMLDivElement>(null);
-  const [animationAction, setAnimationAction] = useState<THREE.AnimationAction | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [loadingProgress, setLoadingProgress] = useState(0);
-  const clipDurationRef = useRef<number | null>(null);
-  const clipWindowStartRef = useRef<number | null>(null);
-  const animationActionRef = useRef<THREE.AnimationAction | null>(null);
   const beadInstancesRef = useRef<BeadInstance[]>([]);
   const searchParams = useSearchParams();
 
@@ -59,13 +54,8 @@ const ModelViewerPage = () => {
     if (!mountRef.current) return;
 
     // Reset state so a new DIY model can be loaded cleanly.
-    setAnimationAction(null);
-    setIsPlaying(false);
     setLoadingError(null);
     setLoadingProgress(0);
-    clipDurationRef.current = null;
-    clipWindowStartRef.current = null;
-    animationActionRef.current = null;
     beadInstancesRef.current = [];
 
     let disposed = false;
@@ -149,21 +139,24 @@ const ModelViewerPage = () => {
 
         if (gltf.animations && gltf.animations.length) {
           mixer = new THREE.AnimationMixer(model);
-          const action = mixer.clipAction(gltf.animations[0]);
-          action.setLoop(THREE.LoopRepeat, Infinity);
-          const fullDur = gltf.animations[0].duration; // 原始完整时长（例如 9.7s）
-          // 只用配置的窗口片段
+          const sourceClip = gltf.animations[0];
+          const fullDur = sourceClip.duration; // 原始完整时长（例如 9.7s）
+          // 只用配置的窗口片段，生成一次播放的子片段
           const windowStart = Math.max(0, fullDur * DEFAULT_PLAYBACK_WINDOW.startRatio);
           const windowEnd = Math.max(windowStart + 0.0001, fullDur * DEFAULT_PLAYBACK_WINDOW.endRatio); // 防止 0
-          const playbackWindow = Math.max(0.0001, windowEnd - windowStart);
-          action.time = windowStart;
-          const defaultDesired = DEFAULT_TARGET_DURATION; // 默认播放该窗口耗时 1.6 秒（可滑杆调节）
-          const timeScale = playbackWindow / defaultDesired;
-          action.setEffectiveTimeScale(timeScale);
-          clipDurationRef.current = playbackWindow;
-          clipWindowStartRef.current = windowStart;
-          animationActionRef.current = action;
-          setAnimationAction(action);
+          const fps = 30;
+          const windowClip = THREE.AnimationUtils.subclip(
+            sourceClip,
+            'windowClip',
+            windowStart * fps,
+            windowEnd * fps,
+            fps
+          );
+          const action = mixer.clipAction(windowClip);
+          action.setLoop(THREE.LoopOnce, 0);
+          action.clampWhenFinished = true;
+          action.setDuration(DEFAULT_TARGET_DURATION); // 目标总时长
+          action.reset().play(); // 默认自动播放一次
         }
 
         // Attach DIY bracelet as a child of the rope bone so it follows the animation.
@@ -341,14 +334,6 @@ const ModelViewerPage = () => {
       const delta = clock.getDelta();
       if (mixer) mixer.update(delta);
       if (updateBraceletTransform) updateBraceletTransform();
-      if (animationActionRef.current && clipDurationRef.current && clipWindowStartRef.current !== null) {
-        // 只在播放窗口内循环，超出则回绕
-        const winStart = clipWindowStartRef.current;
-        const winLen = clipDurationRef.current;
-        const relTime = animationActionRef.current.time - winStart;
-        const wrapped = ((relTime % winLen) + winLen) % winLen; // 防负数
-        animationActionRef.current.time = winStart + wrapped;
-      }
       renderer.render(scene, camera);
     };
     animate();
@@ -389,24 +374,6 @@ const ModelViewerPage = () => {
     };
   }, [baseModelUrl, diyModelUrl]);
 
-  const toggleAnimation = () => {
-    const action = animationActionRef.current;
-    if (!action) return;
-
-    setIsPlaying((prev) => {
-      if (prev) {
-        action.paused = true;
-      } else {
-        if (action.paused) {
-          action.paused = false;
-        } else {
-          action.play();
-        }
-      }
-      return !prev;
-    });
-  };
-
   return (
     <div
       style={{
@@ -419,22 +386,7 @@ const ModelViewerPage = () => {
         padding: 0,
       }}
     >
-        <div style={{ 
-            position: 'absolute', 
-            top: 10, 
-            left: 10, 
-            zIndex: 10, 
-            background: 'rgba(0,0,0,0.5)', 
-            color: 'white', 
-            padding: '10px', 
-            borderRadius: '5px' 
-        }}>
-            <button onClick={toggleAnimation} disabled={!animationAction || !!loadingError}>
-            {isPlaying ? 'Pause Animation' : 'Play Animation'}
-            </button>
-            {loadingProgress < 100 && <p>Loading: {Math.round(loadingProgress)}%</p>}
-            {loadingError && <p style={{ color: 'red' }}>{loadingError}</p>}
-        </div>
+       
       <div ref={mountRef} style={{ width: '100%', height: '100%' }} />
     </div>
   );
