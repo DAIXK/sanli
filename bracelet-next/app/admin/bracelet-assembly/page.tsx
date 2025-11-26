@@ -184,6 +184,8 @@ const BraceletAssemblyPage = () => {
         const bAngle = b.extras?.arcStart ?? b.extras?.currentAngle ?? bAngleRaw;
         return aAngle - bAngle;
       });
+      // 反向排列，让叠加从左侧开始（与当前环的方向相反）
+      sources.reverse();
 
       const beads: AnimatedBead[] = [];
       const startAngle = 0; // topDir
