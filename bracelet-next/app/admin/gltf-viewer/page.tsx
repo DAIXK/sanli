@@ -1,15 +1,25 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+
+const DEFAULT_HUMAN_MODEL = '/static/models/Human-Arm-Animation.gltf';
+const DEFAULT_DIY_MODEL = '/static/diy.gltf';
+const DEFAULT_PLAYBACK_WINDOW = { startRatio: 0.35, endRatio: 0.44 };
+const DEFAULT_TARGET_DURATION = 1.6; // seconds
+const HUMAN_TRANSFORM = {
+  position: [3.4, 1.4, 0],
+  rotation: [1, 1, 1],
+  scale: [4.5, 4.5, 4.5],
+} as const;
 
 const ModelViewerPage = () => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [animationAction, setAnimationAction] = useState<THREE.AnimationAction | null>(null);
-  const [clipDuration, setClipDuration] = useState<number | null>(null); // 实际播放窗口（截取 84%~94% 段）
+  const [clipDuration, setClipDuration] = useState<number | null>(null); // 实际播放窗口（截取指定片段）
   const [fullClipDuration, setFullClipDuration] = useState<number | null>(null); // 原始完整时长
   const [desiredDuration, setDesiredDuration] = useState<number | null>(null); // 播放窗口完成一次所需时间（用于放慢/加速）
   const [animationProgress, setAnimationProgress] = useState(0);
@@ -21,9 +31,50 @@ const ModelViewerPage = () => {
   const clipWindowStartRef = useRef<number | null>(null);
   const fullClipDurationRef = useRef<number | null>(null);
   const animationActionRef = useRef<THREE.AnimationAction | null>(null);
+  const searchParams = useSearchParams();
+
+  const { baseModelUrl, diyModelUrl } = useMemo(() => {
+    const decodeOrRaw = (value: string | null) => {
+      if (!value) return value;
+      try {
+        return decodeURIComponent(value);
+      } catch {
+        return value;
+      }
+    };
+
+    const resolvedBase =
+      decodeOrRaw(searchParams?.get('humanModel')) ||
+      decodeOrRaw(searchParams?.get('baseModel')) ||
+      DEFAULT_HUMAN_MODEL;
+
+    const resolvedDiy =
+      decodeOrRaw(searchParams?.get('diyModel')) ||
+      decodeOrRaw(searchParams?.get('diy')) ||
+      DEFAULT_DIY_MODEL;
+
+    return { baseModelUrl: resolvedBase, diyModelUrl: resolvedDiy };
+  }, [searchParams]);
 
   useEffect(() => {
     if (!mountRef.current) return;
+
+    // Reset state so a new DIY model can be loaded cleanly.
+    setAnimationAction(null);
+    setClipDuration(null);
+    setFullClipDuration(null);
+    setDesiredDuration(null);
+    setAnimationProgress(0);
+    setIsPlaying(false);
+    setLoadingError(null);
+    setLoadingProgress(0);
+    clipDurationRef.current = null;
+    clipWindowStartRef.current = null;
+    fullClipDurationRef.current = null;
+    animationActionRef.current = null;
+    progressRef.current = 0;
+
+    let disposed = false;
 
     // Scene
     const scene = new THREE.Scene();
@@ -35,8 +86,14 @@ const ModelViewerPage = () => {
     scene.background = bgTexture;
 
     // Camera
-    const camera = new THREE.PerspectiveCamera(75, mountRef.current.clientWidth / mountRef.current.clientHeight, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(
+      75,
+      mountRef.current.clientWidth / mountRef.current.clientHeight,
+      0.1,
+      1000
+    );
     camera.position.set(2, 2, 5);
+    camera.lookAt(0, 0, 0);
 
     // Renderer - Set alpha: true for a transparent background
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -52,13 +109,6 @@ const ModelViewerPage = () => {
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     const envMap = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
     scene.environment = envMap;
-
-    // Controls
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.screenSpacePanning = false;
-    controls.maxPolarAngle = Math.PI / 2;
 
     // Lighting - Improved for PBR materials
     const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 2);
@@ -79,38 +129,41 @@ const ModelViewerPage = () => {
     const loader = new GLTFLoader();
     let mixer: THREE.AnimationMixer | null = null;
     let updateBraceletTransform: (() => void) | null = null;
+    let animationId = 0;
 
     loader.load(
-      '/static/models/Human-Arm-Animation.gltf',
+      baseModelUrl,
       (gltf) => {
+        if (disposed) return;
         const model = gltf.scene;
-        
+
         //================================================================
         //== 这里控制模型的默认位置、旋转和缩放
         //================================================================
         // model.position.set(x, y, z);
-        model.position.set(3.4, 1.4, 0); // 举例：将模型沿Y轴向上移动1个单位
+        model.position.set(...HUMAN_TRANSFORM.position); // 举例：将模型沿Y轴向上移动1个单位
 
-        model.rotation.set(1, 1, 1); // (in radians)
+        model.rotation.set(...HUMAN_TRANSFORM.rotation); // (in radians)
         // model.rotation.y = Math.PI; // 举例：将模型沿Y轴旋转180度
 
         // model.scale.set(size, size, size);
-        model.scale.set(4.5, 4.5, 4.5); // 举例：将模型缩小到原来的一半
+        model.scale.set(...HUMAN_TRANSFORM.scale); // 举例：将模型缩小到原来的一半
         //================================================================
 
         scene.add(model);
+        setLoadingProgress(100);
 
         if (gltf.animations && gltf.animations.length) {
           mixer = new THREE.AnimationMixer(model);
           const action = mixer.clipAction(gltf.animations[0]);
           action.setLoop(THREE.LoopRepeat, Infinity);
           const fullDur = gltf.animations[0].duration; // 原始完整时长（例如 9.7s）
-          // 只用 84%~94% 这一段
-          const windowStart = Math.max(0, fullDur * 0.35);
-          const windowEnd = Math.max(windowStart + 0.0001, fullDur * 0.44); // 防止 0
+          // 只用配置的窗口片段
+          const windowStart = Math.max(0, fullDur * DEFAULT_PLAYBACK_WINDOW.startRatio);
+          const windowEnd = Math.max(windowStart + 0.0001, fullDur * DEFAULT_PLAYBACK_WINDOW.endRatio); // 防止 0
           const playbackWindow = Math.max(0.0001, windowEnd - windowStart);
           action.time = windowStart;
-          const defaultDesired = 1.6; // 默认播放该窗口耗时 1.6 秒（可滑杆调节）
+          const defaultDesired = DEFAULT_TARGET_DURATION; // 默认播放该窗口耗时 1.6 秒（可滑杆调节）
           const timeScale = playbackWindow / defaultDesired;
           action.setEffectiveTimeScale(timeScale);
           setFullClipDuration(fullDur);
@@ -132,8 +185,9 @@ const ModelViewerPage = () => {
         if (ropeBone) {
           const diyLoader = new GLTFLoader();
           diyLoader.load(
-            '/static/diy.gltf',
+            diyModelUrl,
             (diyGltf) => {
+              if (disposed) return;
               const diyRoot = new THREE.Group();
               diyRoot.name = 'DIYBraceletAttachment';
 
@@ -227,7 +281,9 @@ const ModelViewerPage = () => {
             },
             undefined,
             (error) => {
+              if (disposed) return;
               console.error('Failed to load DIY bracelet glTF:', error);
+              setLoadingError(`Failed to load DIY model: ${diyModelUrl}.`);
             }
           );
         } else {
@@ -235,23 +291,28 @@ const ModelViewerPage = () => {
         }
       },
       (xhr) => {
-        setLoadingProgress((xhr.loaded / xhr.total) * 100);
+        if (disposed) return;
+        const total = xhr.total || 1;
+        setLoadingProgress((xhr.loaded / total) * 100);
       },
       (error) => {
         console.error('An error happened during loading:', error);
-        setLoadingError('Failed to load model. Check console for details. Make sure the model file exists at /public/static/models/Human-Arm-Animation.gltf');
+        if (!disposed) {
+          setLoadingError(`Failed to load base model: ${baseModelUrl}. Check console for details.`);
+        }
       }
     );
 
     // Animation Loop
     const clock = new THREE.Clock();
     const animate = () => {
-      requestAnimationFrame(animate);
+      if (disposed) return;
+      animationId = requestAnimationFrame(animate);
       const delta = clock.getDelta();
       if (mixer) mixer.update(delta);
       if (updateBraceletTransform) updateBraceletTransform();
       if (animationActionRef.current && clipDurationRef.current && clipWindowStartRef.current !== null) {
-        // 只在播放窗口内循环（84%~94%），超出则回绕
+        // 只在播放窗口内循环，超出则回绕
         const winStart = clipWindowStartRef.current;
         const winLen = clipDurationRef.current;
         const relTime = animationActionRef.current.time - winStart;
@@ -263,7 +324,6 @@ const ModelViewerPage = () => {
           setAnimationProgress(progress);
         }
       }
-      controls.update();
       renderer.render(scene, camera);
     };
     animate();
@@ -279,10 +339,15 @@ const ModelViewerPage = () => {
 
     // Cleanup
     return () => {
+      disposed = true;
       window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(animationId);
       if (mountRef.current && renderer.domElement) {
          mountRef.current.removeChild(renderer.domElement);
       }
+      bgTexture.dispose();
+      pmremGenerator.dispose();
+      envMap.dispose?.();
       // Dispose of scene objects and renderer
       scene.traverse(object => {
         if (object instanceof THREE.Mesh) {
@@ -296,22 +361,24 @@ const ModelViewerPage = () => {
       });
       renderer.dispose();
     };
-  }, []);
+  }, [baseModelUrl, diyModelUrl]);
 
   const toggleAnimation = () => {
     const action = animationActionRef.current;
     if (!action) return;
 
-    if (isPlaying) {
-      action.paused = true;
-    } else {
-      if (action.paused) {
-        action.paused = false;
+    setIsPlaying((prev) => {
+      if (prev) {
+        action.paused = true;
       } else {
-        action.play();
+        if (action.paused) {
+          action.paused = false;
+        } else {
+          action.play();
+        }
       }
-    }
-    setIsPlaying(!isPlaying);
+      return !prev;
+    });
   };
 
   const handleDurationChange = (newDuration: number) => {
@@ -374,6 +441,10 @@ const ModelViewerPage = () => {
             </div>
             {loadingProgress < 100 && <p>Loading: {Math.round(loadingProgress)}%</p>}
             {loadingError && <p style={{ color: 'red' }}>{loadingError}</p>}
+            <div style={{ marginTop: '8px', fontSize: '12px', lineHeight: '16px', wordBreak: 'break-all', maxWidth: '240px' }}>
+              <div>Base: {baseModelUrl}</div>
+              <div>DIY: {diyModelUrl}</div>
+            </div>
         </div>
       <div ref={mountRef} style={{ width: '100%', height: '100%' }} />
     </div>
