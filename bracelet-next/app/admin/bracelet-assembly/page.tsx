@@ -22,16 +22,16 @@ type AnimatedBead = {
   baseScale: THREE.Vector3;
 };
 
-const DEFAULT_DIY_MODEL = '/static/diy.gltf';
-const DEFAULT_RING_RADIUS = 0.165; // meters (6.5 cm)
-const DEFAULT_HEIGHT = 0.02;
-const DEFAULT_BRACELET_SCALE = 1.85;
-const DEFAULT_CAM_RADIUS = 0.28;
-const DEFAULT_CAM_YAW = 0; // 0 -> 面向 +Z
-const DEFAULT_CAM_PITCH = 0; // 抬头角度（弧度）
-const DEFAULT_BRACELET_OFFSET: [number, number, number] = [0, 0, 0];
-const DEFAULT_PER_BEAD_DELAY = 0.18; // 每颗珠子出现的时间间隔（秒）
-const DEFAULT_FLIGHT_DURATION = 0.15; // 单颗珠子滑动到位所需时间（秒）
+const DEFAULT_DIY_MODEL = '/static/diy.gltf'; // 默认 diy 模型路径
+const DEFAULT_RING_RADIUS = 1.185; // 默认环半径（米，约 6.5cm）
+const DEFAULT_HEIGHT = 0.04; // 默认环中心高度（米）
+const DEFAULT_BRACELET_SCALE = 1.85; // 默认整体缩放
+const DEFAULT_CAM_RADIUS = 0.28; // 默认相机距离
+const DEFAULT_CAM_YAW = 0; // 默认相机偏航角（0 表示正面 +Z）
+const DEFAULT_CAM_PITCH = 0; // 默认相机俯仰角（弧度）
+const DEFAULT_BRACELET_OFFSET: [number, number, number] = [0, 0, 0]; // 默认手串偏移
+const DEFAULT_PER_BEAD_DELAY = 0.18; // 默认每颗珠子出现的时间间隔（秒）
+const DEFAULT_FLIGHT_DURATION = 0.15; // 默认单颗珠子滑动到位所需时间（秒）
 const DETAIL_SCALE = 2; // 放大倍数
 const DETAIL_RADIUS_BOOST = 0; // 细节模式半径额外放大比例（保持为 0 让珠子与绳子对齐）
 const DETAIL_CAM_RADIUS = 0.18; // 细节视角相机距离
@@ -40,9 +40,11 @@ const DETAIL_TARGET_LIFT = 0.2; // 沿法线微抬镜头目标
 const DETAIL_TOP_LIFT = 3.2; // 沿 topDir 提升视点，突出顶部珠子
 const DETAIL_DELAY = 0.3; // 完成后停顿
 const DETAIL_ZOOM_IN = 0.6;
-const DETAIL_HOLD = 3.8;
+const DETAIL_HOLD = 1;
 const DETAIL_ZOOM_OUT = 0.6;
 const DETAIL_RADIUS_GAP_FACTOR = 2; // 细节模式下基于珠子直径额外腾出的比例
+const DETAIL_GROUP_LIFT = 0.5; // 细节模式整体沿法线抬升比例（乘以半径）
+const RING_RADIUS_EXTRA = 0.5; // 仅放大绳子/圆圈的半径增量（米），不影响珠子
 
 const BraceletAssemblyPage = () => {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -268,6 +270,23 @@ const BraceletAssemblyPage = () => {
         radius: ringRadius,
         avgDiameter,
       };
+      // 单独放大绳子/圆圈，不影响珠子
+      const ringScale =
+        ringRadius > 1e-6 ? (ringRadius + RING_RADIUS_EXTRA) / ringRadius : 1;
+      if (Math.abs(ringScale - 1) > 1e-6) {
+        const ropeMatches: string[] = [];
+        root.traverse((obj) => {
+          const name = obj.name?.toLowerCase?.() || '';
+          if (name.includes('rope') || name.includes('ring') || name.includes('circle')) {
+            obj.scale.multiplyScalar(ringScale);
+            obj.updateMatrixWorld(true);
+            ropeMatches.push(obj.name || '(unnamed)');
+          }
+        });
+        if (ropeMatches.length === 0) {
+          console.warn('Ring resize: no rope-like nodes matched. Children:', root.children.map((c) => c.name));
+        }
+      }
 
       // Sort by arcStart/currentAngle to place beads around the ring in order.
       sources.sort((a, b) => {
@@ -415,12 +434,14 @@ const BraceletAssemblyPage = () => {
       }
 
       // 应用整体缩放（包含细节放大 + 间隙带来的环增大）
-      const { radius, avgDiameter } = ringBasisRef.current;
+      const { radius, avgDiameter, normal } = ringBasisRef.current;
       const gapDelta = detailFactor * ((DETAIL_RADIUS_GAP_FACTOR * (avgDiameter || 0)) / Math.max(radius, 1e-6));
       const detailScale = 1 + detailFactor * (DETAIL_SCALE - 1);
       const groupScale = detailScale * (1 + gapDelta);
       if (braceletGroupRef.current) {
         braceletGroupRef.current.scale.setScalar(groupScale);
+        const lift = detailFactor * radius * DETAIL_GROUP_LIFT;
+        braceletGroupRef.current.position.copy(normal.clone().multiplyScalar(lift));
       }
       detailProgressRef.current = detailFactor;
 
