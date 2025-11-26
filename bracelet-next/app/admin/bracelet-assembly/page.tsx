@@ -32,6 +32,8 @@ const DEFAULT_CAM_PITCH = 0; // 默认相机俯仰角（弧度）
 const DEFAULT_BRACELET_OFFSET: [number, number, number] = [0, 0, 0]; // 默认手串偏移
 const DEFAULT_PER_BEAD_DELAY = 0.18; // 默认每颗珠子出现的时间间隔（秒）
 const DEFAULT_FLIGHT_DURATION = 0.15; // 默认单颗珠子滑动到位所需时间（秒）
+const DEFAULT_SPIN_SPEED = 4.85; // 默认细节结束后旋转速度（弧度/秒）
+const DEFAULT_SPIN_TURNS = 1; // 默认细节结束后旋转圈数
 const DETAIL_SCALE = 2; // 放大倍数
 const DETAIL_RADIUS_BOOST = 0; // 细节模式半径额外放大比例（保持为 0 让珠子与绳子对齐）
 const DETAIL_CAM_RADIUS = 0.18; // 细节视角相机距离
@@ -71,9 +73,11 @@ const BraceletAssemblyPage = () => {
   const detailPhaseRef = useRef<'idle' | 'zoomIn' | 'hold' | 'zoomOut' | 'done'>('idle');
   const detailPhaseStartRef = useRef(0);
   const detailProgressRef = useRef(0);
+  const spinProgressRef = useRef(0);
+  const spinTargetRef = useRef(0);
   const searchParams = useSearchParams();
 
-  const { diyModelUrl, braceletScale, braceletOffset, camRadius, camYaw, camPitch } = useMemo(() => {
+  const { diyModelUrl, braceletScale, braceletOffset, camRadius, camYaw, camPitch, spinSpeed, spinTurns } = useMemo(() => {
     const parseNumber = (v: string | null, fallback: number) => {
       if (v === null || v === undefined) return fallback;
       const n = parseFloat(v);
@@ -97,6 +101,8 @@ const BraceletAssemblyPage = () => {
     const camR = parseNumber(searchParams?.get('camR'), DEFAULT_CAM_RADIUS);
     const camYawVal = parseNumber(searchParams?.get('camYaw'), DEFAULT_CAM_YAW);
     const camPitchVal = parseNumber(searchParams?.get('camPitch'), DEFAULT_CAM_PITCH);
+    const spin = parseNumber(searchParams?.get('spinSpeed'), DEFAULT_SPIN_SPEED);
+    const turns = parseNumber(searchParams?.get('spinTurns'), DEFAULT_SPIN_TURNS);
 
     return {
       diyModelUrl: url,
@@ -105,6 +111,8 @@ const BraceletAssemblyPage = () => {
       camRadius: camR,
       camYaw: camYawVal,
       camPitch: camPitchVal,
+      spinSpeed: spin,
+      spinTurns: turns,
     };
   }, [searchParams]);
 
@@ -117,6 +125,8 @@ const BraceletAssemblyPage = () => {
     sequenceEndRef.current = 0;
     detailPhaseRef.current = 'idle';
     detailPhaseStartRef.current = 0;
+    spinProgressRef.current = 0;
+    spinTargetRef.current = 0;
 
     let disposed = false;
     let animationId = 0;
@@ -361,6 +371,7 @@ const BraceletAssemblyPage = () => {
       beadAnimationsRef.current = beads;
       sequenceEndRef.current =
         beads.length > 0 ? baseStart + (beads.length - 1) * perBeadDelay + flightDuration : 0;
+      spinTargetRef.current = DEFAULT_SPIN_TURNS * Math.PI * 2;
       detailPhaseRef.current = 'idle';
       detailPhaseStartRef.current = 0;
       applyCamera(0);
@@ -399,7 +410,8 @@ const BraceletAssemblyPage = () => {
     const animate = () => {
       if (disposed) return;
       animationId = requestAnimationFrame(animate);
-      const now = clock.getElapsedTime();
+      const delta = clock.getDelta();
+      const now = clock.elapsedTime;
 
       // 细节阶段管理
       let detailFactor = 0;
@@ -472,6 +484,17 @@ const BraceletAssemblyPage = () => {
         });
       }
 
+      if (detailPhaseRef.current === 'done' && braceletGroupRef.current) {
+        const spinAxis = new THREE.Vector3(0, 1, 0);
+        if (spinProgressRef.current < spinTargetRef.current) {
+          const step = spinSpeed * delta;
+          const remaining = spinTargetRef.current - spinProgressRef.current;
+          const applied = Math.min(step, remaining);
+          braceletGroupRef.current.rotateOnWorldAxis(spinAxis, applied);
+          spinProgressRef.current += applied;
+        }
+      }
+
       applyCamera(detailFactor);
       renderer.render(scene, camera);
     };
@@ -508,7 +531,7 @@ const BraceletAssemblyPage = () => {
       renderer.dispose();
       beadAnimationsRef.current = [];
     };
-  }, [diyModelUrl, braceletScale, braceletOffset, camRadius, camYaw, camPitch]);
+  }, [diyModelUrl, braceletScale, braceletOffset, camRadius, camYaw, camPitch, spinSpeed, spinTurns]);
 
   return (
     <div
