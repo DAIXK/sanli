@@ -16,6 +16,17 @@ const HUMAN_TRANSFORM = {
   scale: [4.5, 4.5, 4.5],
 } as const;
 
+type AnimatedBead = {
+  object: THREE.Object3D;
+  startTime: number;
+  duration: number;
+  startPos: THREE.Vector3;
+  targetPos: THREE.Vector3;
+  startQuat: THREE.Quaternion;
+  targetQuat: THREE.Quaternion;
+  arcHeight: number;
+};
+
 const ModelViewerPage = () => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [animationAction, setAnimationAction] = useState<THREE.AnimationAction | null>(null);
@@ -25,6 +36,7 @@ const ModelViewerPage = () => {
   const clipDurationRef = useRef<number | null>(null);
   const clipWindowStartRef = useRef<number | null>(null);
   const animationActionRef = useRef<THREE.AnimationAction | null>(null);
+  const beadAnimationsRef = useRef<AnimatedBead[]>([]);
   const searchParams = useSearchParams();
 
   const { baseModelUrl, diyModelUrl } = useMemo(() => {
@@ -61,6 +73,7 @@ const ModelViewerPage = () => {
     clipDurationRef.current = null;
     clipWindowStartRef.current = null;
     animationActionRef.current = null;
+    beadAnimationsRef.current = [];
 
     let disposed = false;
 
@@ -167,6 +180,21 @@ const ModelViewerPage = () => {
           ropeMesh.visible = false; // 隐藏原有手串
         }
         if (ropeBone) {
+          const beadGroup = new THREE.Group();
+          beadGroup.name = 'AnimatedBeads';
+          ropeBone.add(beadGroup);
+          const localToBone = new THREE.Matrix4();
+          const targetMatrix = new THREE.Matrix4();
+          const targetPos = new THREE.Vector3();
+          const targetQuat = new THREE.Quaternion();
+          const targetScale = new THREE.Vector3();
+          const startPos = new THREE.Vector3();
+          const startQuat = new THREE.Quaternion();
+          const launchOffset = new THREE.Vector3(0.06, 0.08, 0.18); // 偏移一点从空中飞入
+          const timelineStart = clock.getElapsedTime();
+          const perBeadDelay = 0.25;
+          const flightDuration = 0.9;
+
           const diyLoader = new GLTFLoader();
           diyLoader.load(
             diyModelUrl,
@@ -262,6 +290,50 @@ const ModelViewerPage = () => {
               updateBraceletTransform();
 
               console.log('DIY bracelet attached to rope bone at', ropeBone.getWorldPosition(new THREE.Vector3()));
+
+              // 按顺序逐颗飞入的手串动画
+              const beads: AnimatedBead[] = [];
+              diyRoot.updateMatrixWorld(true);
+              ropeBone.updateMatrixWorld(true);
+              const ropeWorldInv = localToBone.copy(ropeBone.matrixWorld).invert();
+
+              diyRoot.traverse((obj) => {
+                const extras = (obj as any).userData || {};
+                if (!extras.isMarbleRoot) return;
+                obj.updateMatrixWorld(true);
+                targetMatrix.multiplyMatrices(ropeWorldInv, obj.matrixWorld);
+                targetMatrix.decompose(targetPos, targetQuat, targetScale);
+
+                startPos.copy(targetPos).add(launchOffset);
+                startQuat.copy(targetQuat);
+
+                const bounds = extras.bounds as { diameter?: number } | undefined;
+                const arcHeight = bounds?.diameter ? bounds.diameter * 1.2 : 0.06;
+                const beadClone = obj.clone(true);
+                beadClone.position.copy(startPos);
+                beadClone.quaternion.copy(startQuat);
+                beadClone.scale.copy(targetScale);
+                beadClone.visible = false;
+                beadGroup.add(beadClone);
+
+                const index = beads.length;
+                beads.push({
+                  object: beadClone,
+                  startTime: timelineStart + index * perBeadDelay,
+                  duration: flightDuration,
+                  startPos: startPos.clone(),
+                  targetPos: targetPos.clone(),
+                  startQuat: startQuat.clone(),
+                  targetQuat: targetQuat.clone(),
+                  arcHeight,
+                });
+
+                // 隐藏原始珠子，避免重叠
+                obj.visible = false;
+              });
+
+              beadAnimationsRef.current = beads;
+              diyRoot.visible = false; // 仅用于采样，不直接显示
             },
             undefined,
             (error) => {
@@ -303,6 +375,22 @@ const ModelViewerPage = () => {
         const wrapped = ((relTime % winLen) + winLen) % winLen; // 防负数
         animationActionRef.current.time = winStart + wrapped;
       }
+      if (beadAnimationsRef.current.length) {
+        const now = clock.getElapsedTime();
+        beadAnimationsRef.current.forEach((item) => {
+          const t = (now - item.startTime) / item.duration;
+          if (t <= 0) {
+            item.object.visible = false;
+            return;
+          }
+          const clamped = Math.min(1, t);
+          const eased = clamped * clamped * (3 - 2 * clamped); // smoothstep
+          item.object.visible = true;
+          item.object.position.lerpVectors(item.startPos, item.targetPos, eased);
+          item.object.position.y += Math.sin(eased * Math.PI) * item.arcHeight;
+          item.object.quaternion.slerpQuaternions(item.startQuat, item.targetQuat, eased);
+        });
+      }
       renderer.render(scene, camera);
     };
     animate();
@@ -339,6 +427,7 @@ const ModelViewerPage = () => {
         }
       });
       renderer.dispose();
+      beadAnimationsRef.current = [];
     };
   }, [baseModelUrl, diyModelUrl]);
 
