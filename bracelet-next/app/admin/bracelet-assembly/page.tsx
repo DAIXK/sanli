@@ -21,6 +21,8 @@ type AnimatedBead = {
 const DEFAULT_DIY_MODEL = '/static/diy.gltf';
 const DEFAULT_RING_RADIUS = 0.065; // meters (6.5 cm)
 const DEFAULT_HEIGHT = 0.02;
+const DEFAULT_BRACELET_SCALE = 1;
+const DEFAULT_BRACELET_OFFSET: [number, number, number] = [0, 0, 0];
 
 const BraceletAssemblyPage = () => {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -42,14 +44,33 @@ const BraceletAssemblyPage = () => {
   const beadAnimationsRef = useRef<AnimatedBead[]>([]);
   const searchParams = useSearchParams();
 
-  const diyModelUrl = useMemo(() => {
+  const { diyModelUrl, braceletScale, braceletOffset } = useMemo(() => {
+    const parseNumber = (v: string | null, fallback: number) => {
+      if (v === null || v === undefined) return fallback;
+      const n = parseFloat(v);
+      return Number.isFinite(n) ? n : fallback;
+    };
+
     const raw = searchParams?.get('diyModel') || searchParams?.get('diy');
-    if (!raw) return DEFAULT_DIY_MODEL;
-    try {
-      return decodeURIComponent(raw);
-    } catch {
-      return raw;
+    let url = DEFAULT_DIY_MODEL;
+    if (raw) {
+      try {
+        url = decodeURIComponent(raw);
+      } catch {
+        url = raw;
+      }
     }
+
+    const scale = parseNumber(searchParams?.get('scale'), DEFAULT_BRACELET_SCALE);
+    const offsetX = parseNumber(searchParams?.get('offsetX'), DEFAULT_BRACELET_OFFSET[0]);
+    const offsetY = parseNumber(searchParams?.get('offsetY'), DEFAULT_BRACELET_OFFSET[1]);
+    const offsetZ = parseNumber(searchParams?.get('offsetZ'), DEFAULT_BRACELET_OFFSET[2]);
+
+    return {
+      diyModelUrl: url,
+      braceletScale: scale,
+      braceletOffset: new THREE.Vector3(offsetX, offsetY, offsetZ),
+    };
   }, [searchParams]);
 
   useEffect(() => {
@@ -192,7 +213,7 @@ const BraceletAssemblyPage = () => {
       const baseStart = clock.getElapsedTime();
       const perBeadDelay = 0.25;
       const flightDuration = 1.1;
-      const arcHeightBase = ringRadius * 0.35;
+      const arcHeightBase = 0; // 轨迹紧贴圆圈平面，不抬高
 
       sources.forEach((source, index) => {
         const vec = source.targetPos.clone().sub(center);
@@ -216,7 +237,7 @@ const BraceletAssemblyPage = () => {
         scene.add(beadClone);
 
         const bounds = source.extras?.bounds as { diameter?: number } | undefined;
-        const arcHeight = bounds?.diameter ? Math.max(arcHeightBase, bounds.diameter) : arcHeightBase;
+        const arcHeight = arcHeightBase; // 可以按需改成 bounds.diameter 调整抬升
 
         beads.push({
           object: beadClone,
@@ -242,9 +263,13 @@ const BraceletAssemblyPage = () => {
       (gltf) => {
         if (disposed) return;
         const diyRoot = gltf.scene;
-        diyRoot.position.set(0, DEFAULT_HEIGHT, 0);
+        diyRoot.position.set(
+          braceletOffset.x,
+          DEFAULT_HEIGHT + braceletOffset.y,
+          braceletOffset.z
+        );
         diyRoot.rotation.set(0, 0, 0);
-        diyRoot.scale.set(1, 1, 1);
+        diyRoot.scale.set(braceletScale, braceletScale, braceletScale);
         scene.add(diyRoot);
 
         diyRoot.updateMatrixWorld(true);
@@ -285,7 +310,7 @@ const BraceletAssemblyPage = () => {
             .multiplyScalar(Math.cos(angle) * radius)
             .add(sideDir.clone().multiplyScalar(Math.sin(angle) * radius))
             .add(center);
-          pos.add(normal.clone().multiplyScalar(Math.sin(eased * Math.PI) * item.arcHeight));
+          // 不叠加高度，轨迹贴合圈所在平面
           item.object.position.copy(pos);
           item.object.quaternion.slerpQuaternions(item.startQuat, item.targetQuat, eased);
         });
@@ -325,7 +350,7 @@ const BraceletAssemblyPage = () => {
       renderer.dispose();
       beadAnimationsRef.current = [];
     };
-  }, [diyModelUrl]);
+  }, [diyModelUrl, braceletScale, braceletOffset]);
 
   return (
     <div
