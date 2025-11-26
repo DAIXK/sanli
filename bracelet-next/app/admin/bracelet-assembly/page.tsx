@@ -12,7 +12,9 @@ type AnimatedBead = {
   duration: number;
   startPos: THREE.Vector3;
   targetPos: THREE.Vector3;
+  startAngle: number;
   targetAngle: number;
+  angleDelta: number;
   startQuat: THREE.Quaternion;
   targetQuat: THREE.Quaternion;
   arcHeight: number;
@@ -210,6 +212,8 @@ const BraceletAssemblyPage = () => {
 
       const beads: AnimatedBead[] = [];
       const startAngle = 0; // topDir
+      let prevAngle = startAngle;
+      const twoPi = Math.PI * 2;
       const baseStart = clock.getElapsedTime();
       const perBeadDelay = 0.25;
       const flightDuration = 1.1;
@@ -217,7 +221,14 @@ const BraceletAssemblyPage = () => {
 
       sources.forEach((source, index) => {
         const vec = source.targetPos.clone().sub(center);
-        const targetAngle = Math.atan2(vec.dot(sideDir), vec.dot(topDir));
+        let targetAngle = Math.atan2(vec.dot(sideDir), vec.dot(topDir));
+        // 展开角度，保证不回头，只沿顺序前进
+        while (targetAngle < prevAngle - 1e-6) {
+          targetAngle += twoPi;
+        }
+        const startAngleForBead = prevAngle;
+        const angleDelta = targetAngle - startAngleForBead;
+
         const targetPos = topDir
           .clone()
           .multiplyScalar(Math.cos(targetAngle) * ringRadius)
@@ -225,8 +236,8 @@ const BraceletAssemblyPage = () => {
           .add(center);
         const startPos = topDir
           .clone()
-          .multiplyScalar(Math.cos(startAngle) * ringRadius)
-          .add(sideDir.clone().multiplyScalar(Math.sin(startAngle) * ringRadius))
+          .multiplyScalar(Math.cos(startAngleForBead) * ringRadius)
+          .add(sideDir.clone().multiplyScalar(Math.sin(startAngleForBead) * ringRadius))
           .add(center)
           .add(normal.clone().multiplyScalar(0.03)); // 稍微抬高
         const beadClone = source.obj.clone(true);
@@ -245,7 +256,9 @@ const BraceletAssemblyPage = () => {
           duration: flightDuration,
           startPos,
           targetPos,
+          startAngle: startAngleForBead,
           targetAngle,
+          angleDelta,
           startQuat: source.targetQuat.clone(),
           targetQuat: source.targetQuat.clone(),
           arcHeight,
@@ -253,6 +266,8 @@ const BraceletAssemblyPage = () => {
 
         // Hide original bead
         source.obj.visible = false;
+
+        prevAngle = targetAngle;
       });
 
       beadAnimationsRef.current = beads;
@@ -303,8 +318,8 @@ const BraceletAssemblyPage = () => {
           const clamped = Math.min(1, t);
           const eased = clamped * clamped * (3 - 2 * clamped);
           item.object.visible = true;
-          // 一个完整圈 + 落到目标角度
-          const angle = 0 + 2 * Math.PI * eased + (item.targetAngle - 0) * eased;
+          // 从起点沿顺序走到各自目标，距离为 angleDelta
+          const angle = item.startAngle + item.angleDelta * eased;
           const pos = topDir
             .clone()
             .multiplyScalar(Math.cos(angle) * radius)
