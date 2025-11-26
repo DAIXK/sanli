@@ -10,6 +10,7 @@ type AnimatedBead = {
   object: THREE.Object3D;
   startTime: number;
   duration: number;
+  spawnPos: THREE.Vector3;
   startPos: THREE.Vector3;
   targetPos: THREE.Vector3;
   startAngle: number;
@@ -211,37 +212,34 @@ const BraceletAssemblyPage = () => {
       sources.reverse();
 
       const beads: AnimatedBead[] = [];
-      const startAngle = 0; // topDir
-      let prevAngle = startAngle;
+      const startAngle = 0.1; // 顶点作为初始参考，所有珠子同一起点
+      const spawnPos = topDir
+        .clone()
+        .multiplyScalar(Math.cos(startAngle) * ringRadius)
+        .add(sideDir.clone().multiplyScalar(Math.sin(startAngle) * ringRadius))
+        .add(center)
+        .add(normal.clone().multiplyScalar(0.01)); // 固定出现点，略微抬高
       const twoPi = Math.PI * 2;
       const baseStart = clock.getElapsedTime();
-      const perBeadDelay = 0.25;
-      const flightDuration = 1.1;
+      const perBeadDelay = 0.35; // 放慢节奏
+      const flightDuration = 1.6; // 每颗滑动更慢
       const arcHeightBase = 0; // 轨迹紧贴圆圈平面，不抬高
 
       sources.forEach((source, index) => {
         const vec = source.targetPos.clone().sub(center);
         let targetAngle = Math.atan2(vec.dot(sideDir), vec.dot(topDir));
-        // 展开角度，保证不回头，只沿顺序前进
-        while (targetAngle < prevAngle - 1e-6) {
-          targetAngle += twoPi;
-        }
-        const startAngleForBead = prevAngle;
-        const angleDelta = targetAngle - startAngleForBead;
+        // 展开角度，保证从统一起点按正向行进
+        while (targetAngle < startAngle - 1e-6) targetAngle += twoPi;
+        const angleDelta = targetAngle - startAngle;
 
         const targetPos = topDir
           .clone()
           .multiplyScalar(Math.cos(targetAngle) * ringRadius)
           .add(sideDir.clone().multiplyScalar(Math.sin(targetAngle) * ringRadius))
           .add(center);
-        const startPos = topDir
-          .clone()
-          .multiplyScalar(Math.cos(startAngleForBead) * ringRadius)
-          .add(sideDir.clone().multiplyScalar(Math.sin(startAngleForBead) * ringRadius))
-          .add(center)
-          .add(normal.clone().multiplyScalar(0.03)); // 稍微抬高
+        const startPos = spawnPos.clone();
         const beadClone = source.obj.clone(true);
-        beadClone.position.copy(startPos);
+        beadClone.position.copy(spawnPos); // 初始显示在固定位置
         beadClone.quaternion.copy(source.targetQuat);
         beadClone.scale.copy(source.targetScale);
         beadClone.visible = false;
@@ -254,9 +252,10 @@ const BraceletAssemblyPage = () => {
           object: beadClone,
           startTime: baseStart + index * perBeadDelay,
           duration: flightDuration,
+          spawnPos: spawnPos.clone(),
           startPos,
           targetPos,
-          startAngle: startAngleForBead,
+          startAngle,
           targetAngle,
           angleDelta,
           startQuat: source.targetQuat.clone(),
@@ -266,8 +265,6 @@ const BraceletAssemblyPage = () => {
 
         // Hide original bead
         source.obj.visible = false;
-
-        prevAngle = targetAngle;
       });
 
       beadAnimationsRef.current = beads;
@@ -312,7 +309,9 @@ const BraceletAssemblyPage = () => {
         beadAnimationsRef.current.forEach((item) => {
           const t = (now - item.startTime) / item.duration;
           if (t <= 0) {
-            item.object.visible = false;
+            item.object.visible = true;
+            item.object.position.copy(item.spawnPos);
+            item.object.quaternion.copy(item.startQuat);
             return;
           }
           const clamped = Math.min(1, t);
