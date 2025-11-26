@@ -19,17 +19,11 @@ const HUMAN_TRANSFORM = {
 const ModelViewerPage = () => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [animationAction, setAnimationAction] = useState<THREE.AnimationAction | null>(null);
-  const [clipDuration, setClipDuration] = useState<number | null>(null); // 实际播放窗口（截取指定片段）
-  const [fullClipDuration, setFullClipDuration] = useState<number | null>(null); // 原始完整时长
-  const [desiredDuration, setDesiredDuration] = useState<number | null>(null); // 播放窗口完成一次所需时间（用于放慢/加速）
-  const [animationProgress, setAnimationProgress] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [loadingProgress, setLoadingProgress] = useState(0);
-  const progressRef = useRef(0);
   const clipDurationRef = useRef<number | null>(null);
   const clipWindowStartRef = useRef<number | null>(null);
-  const fullClipDurationRef = useRef<number | null>(null);
   const animationActionRef = useRef<THREE.AnimationAction | null>(null);
   const searchParams = useSearchParams();
 
@@ -61,18 +55,12 @@ const ModelViewerPage = () => {
 
     // Reset state so a new DIY model can be loaded cleanly.
     setAnimationAction(null);
-    setClipDuration(null);
-    setFullClipDuration(null);
-    setDesiredDuration(null);
-    setAnimationProgress(0);
     setIsPlaying(false);
     setLoadingError(null);
     setLoadingProgress(0);
     clipDurationRef.current = null;
     clipWindowStartRef.current = null;
-    fullClipDurationRef.current = null;
     animationActionRef.current = null;
-    progressRef.current = 0;
 
     let disposed = false;
 
@@ -166,12 +154,8 @@ const ModelViewerPage = () => {
           const defaultDesired = DEFAULT_TARGET_DURATION; // 默认播放该窗口耗时 1.6 秒（可滑杆调节）
           const timeScale = playbackWindow / defaultDesired;
           action.setEffectiveTimeScale(timeScale);
-          setFullClipDuration(fullDur);
-          fullClipDurationRef.current = fullDur;
-          setClipDuration(playbackWindow);
           clipDurationRef.current = playbackWindow;
           clipWindowStartRef.current = windowStart;
-          setDesiredDuration(defaultDesired);
           animationActionRef.current = action;
           setAnimationAction(action);
         }
@@ -318,11 +302,6 @@ const ModelViewerPage = () => {
         const relTime = animationActionRef.current.time - winStart;
         const wrapped = ((relTime % winLen) + winLen) % winLen; // 防负数
         animationActionRef.current.time = winStart + wrapped;
-        const progress = Math.max(0, Math.min(100, (wrapped / winLen) * 100));
-        if (Math.abs(progress - progressRef.current) > 0.2) {
-          progressRef.current = progress;
-          setAnimationProgress(progress);
-        }
       }
       renderer.render(scene, camera);
     };
@@ -381,15 +360,6 @@ const ModelViewerPage = () => {
     });
   };
 
-  const handleDurationChange = (newDuration: number) => {
-    const action = animationActionRef.current;
-    const clipDur = clipDurationRef.current;
-    if (!action || !clipDur || Number.isNaN(newDuration) || newDuration <= 0) return;
-    const timeScale = clipDur / newDuration;
-    action.setEffectiveTimeScale(timeScale);
-    setDesiredDuration(newDuration);
-  };
-
   return (
     <div
       style={{
@@ -415,36 +385,8 @@ const ModelViewerPage = () => {
             <button onClick={toggleAnimation} disabled={!animationAction || !!loadingError}>
             {isPlaying ? 'Pause Animation' : 'Play Animation'}
             </button>
-            {clipDuration && (
-              <div style={{ marginTop: '8px' }}>
-                <label style={{ display: 'block', marginBottom: '4px' }}>
-                  播放窗口时长（秒，越大越慢）: {desiredDuration ? desiredDuration.toFixed(1) : '...'} / 窗口 {clipDuration.toFixed(1)}
-                  {fullClipDuration ? ` / 原始 ${fullClipDuration.toFixed(1)}` : ''}
-                </label>
-                <input
-                  type="range"
-                  min={clipDuration * 0.5}
-                  max={clipDuration * 4}
-                  step={0.1}
-                  value={desiredDuration ?? clipDuration * 2}
-                  onChange={(e) => handleDurationChange(parseFloat(e.target.value))}
-                  style={{ width: '200px' }}
-                  disabled={!clipDuration}
-                />
-              </div>
-            )}
-            <div style={{ marginTop: '8px', width: '220px' }}>
-              <div style={{ fontSize: '12px', marginBottom: '4px' }}>动画进度：{animationProgress.toFixed(1)}%</div>
-              <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.3)', borderRadius: '3px', overflow: 'hidden' }}>
-                <div style={{ width: `${animationProgress}%`, height: '100%', background: '#4caf50' }} />
-              </div>
-            </div>
             {loadingProgress < 100 && <p>Loading: {Math.round(loadingProgress)}%</p>}
             {loadingError && <p style={{ color: 'red' }}>{loadingError}</p>}
-            <div style={{ marginTop: '8px', fontSize: '12px', lineHeight: '16px', wordBreak: 'break-all', maxWidth: '240px' }}>
-              <div>Base: {baseModelUrl}</div>
-              <div>DIY: {diyModelUrl}</div>
-            </div>
         </div>
       <div ref={mountRef} style={{ width: '100%', height: '100%' }} />
     </div>
