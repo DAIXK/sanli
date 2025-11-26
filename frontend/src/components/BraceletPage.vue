@@ -566,6 +566,8 @@ const modelExporting = ref(false)
 const canExportModel = computed(
   () => sceneReady.value && marbleCount.value > 0 && !!ringRoot
 )
+const DIY_MODEL_CACHE_KEY = 'bracelet_diy_model_cache'
+const DEFAULT_SEQUENCE_PLAY_URL = '/sequence-play'
 const deleteZone = reactive({
   visible: false,
   hovered: false
@@ -1039,6 +1041,72 @@ const buildExportFileName = () => {
   return `${baseName}-diy-${Date.now()}.glb`
 }
 
+const resolveSequencePlayUrl = () => {
+  if (!isH5 || typeof window === 'undefined') return ''
+  const envUrl = import.meta?.env?.VITE_SEQUENCE_PLAY_URL
+  const base =
+    (typeof envUrl === 'string' && envUrl.trim()) || DEFAULT_SEQUENCE_PLAY_URL
+  if (/^https?:\/\//i.test(base)) return base
+  try {
+    return new URL(base, window.location.origin).toString()
+  } catch (error) {
+    console.warn('构建 sequence-play 地址失败', error)
+    return base
+  }
+}
+
+const openSequencePlayPage = () => {
+  const target = resolveSequencePlayUrl()
+  if (!target) {
+    console.warn('sequence-play 地址为空，无法跳转')
+    return false
+  }
+  try {
+    console.info('[bracelet] go sequence-play =>', target)
+    window.location.href = target
+    // 某些内嵌环境会拦截 assign/href，尝试备用方式
+    setTimeout(() => {
+      try {
+        window.location.assign(target)
+      } catch (error) {
+        console.warn('备用跳转失败', error)
+      }
+    }, 0)
+    return true // 让调用方认为已触发跳转
+  } catch (error) {
+    console.warn('跳转 sequence-play 失败', error)
+    return false
+  }
+}
+
+const navigateToSequencePlay = () => openSequencePlayPage()
+
+const blobToDataUrl = (blob) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(reader.error || new Error('无法读取模型数据'))
+    reader.readAsDataURL(blob)
+  })
+
+const cacheBraceletModel = async (blob, filename) => {
+  if (!isH5 || typeof window === 'undefined' || !blob) return false
+  try {
+    const dataUrl = await blobToDataUrl(blob)
+    const payload = {
+      filename,
+      type: blob.type || 'model/gltf-binary',
+      dataUrl,
+      savedAt: Date.now()
+    }
+    window.localStorage?.setItem(DIY_MODEL_CACHE_KEY, JSON.stringify(payload))
+    return true
+  } catch (error) {
+    console.warn('缓存模型失败', error)
+    return false
+  }
+}
+
 const cloneObjectTree = (object, name = '') => {
   if (!object) return null
   object.updateWorldMatrix?.(true, true)
@@ -1138,16 +1206,17 @@ const handleExportModel = async () => {
   try {
     const blob = await exportBraceletModel()
     const fileName = buildExportFileName()
-    const downloaded = downloadBlob(blob, fileName)
-    if (!downloaded) {
-      throw new Error('无法触发下载')
+    const cached = await cacheBraceletModel(blob, fileName)
+    if (!cached) {
+      throw new Error('无法缓存模型')
     }
     if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
       uni.showToast({
-        title: '已导出模型',
+        title: '模型已缓存，可直接播放',
         icon: 'none'
       })
     }
+    navigateToSequencePlay()
   } catch (error) {
     console.error('导出模型失败', error)
     if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {

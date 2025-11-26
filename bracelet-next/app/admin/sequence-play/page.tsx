@@ -1,16 +1,64 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import BraceletAssemblyPage from '../bracelet-assembly/page';
 import ModelViewerPage from '../gltf-viewer/page';
 
+const DIY_MODEL_CACHE_KEY = 'bracelet_diy_model_cache';
+
+const dataUrlToBlob = (dataUrl: string, fallbackType = 'application/octet-stream') => {
+  if (!dataUrl || typeof dataUrl !== 'string') return new Blob([], { type: fallbackType });
+  const [meta, base64 = ''] = dataUrl.split(',');
+  const mimeMatch = /^data:(.*?);/.exec(meta || '');
+  const mime = mimeMatch?.[1] || fallbackType;
+  try {
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new Blob([bytes.buffer], { type: mime });
+  } catch (error) {
+    console.warn('Failed to decode cached diy model', error);
+    return new Blob([], { type: fallbackType });
+  }
+};
+
 const SequencePlayPage = () => {
   const searchParams = useSearchParams();
   const [stage, setStage] = useState<'assembly' | 'viewer'>('assembly');
+  const [cachedDiyUrl, setCachedDiyUrl] = useState<string | undefined>(undefined);
+  const cachedUrlRef = useRef<string | null>(null);
 
   const handleAssemblyFinished = useCallback(() => {
     setStage('viewer');
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const raw = window.localStorage?.getItem(DIY_MODEL_CACHE_KEY);
+    if (raw) {
+      try {
+        const payload = JSON.parse(raw);
+        if (payload?.dataUrl) {
+          const blob = dataUrlToBlob(payload.dataUrl, payload.type || 'model/gltf-binary');
+          if (blob.size > 0) {
+            const objectUrl = URL.createObjectURL(blob);
+            cachedUrlRef.current = objectUrl;
+            setCachedDiyUrl(objectUrl);
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to restore cached diy model', error);
+      }
+    }
+    return () => {
+      if (cachedUrlRef.current) {
+        URL.revokeObjectURL(cachedUrlRef.current);
+      }
+    };
   }, []);
 
   const config = useMemo(() => {
@@ -38,6 +86,8 @@ const SequencePlayPage = () => {
     };
   }, [searchParams]);
 
+  const assemblyDiyUrl = cachedDiyUrl || config.assemblyDiy;
+  const viewerDiyUrl = cachedDiyUrl || config.diy;
   const label = stage === 'assembly' ? '组装展示中...' : '佩戴展示中...';
 
   useEffect(() => {
@@ -69,13 +119,13 @@ const SequencePlayPage = () => {
       {stage === 'assembly' ? (
         <BraceletAssemblyPage
           onFinished={handleAssemblyFinished}
-          diyModelUrl={config.assemblyDiy}
+          diyModelUrl={assemblyDiyUrl}
           backgroundUrl={config.assemblyBg}
         />
       ) : (
         <ModelViewerPage
           baseModelUrl={config.viewerBase}
-          diyModelUrl={config.diy}
+          diyModelUrl={viewerDiyUrl}
           backgroundUrl={config.viewerBg}
         />
       )}

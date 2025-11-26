@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
+const DIY_MODEL_CACHE_KEY = 'bracelet_diy_model_cache';
 const DEFAULT_HUMAN_MODEL = '/static/models/Human-Arm-Animation.gltf';
 const DEFAULT_DIY_MODEL = '/static/diy.gltf';
 const DEFAULT_BG_IMAGE = '/static/background.png';
@@ -27,12 +28,58 @@ type ModelViewerPageProps = {
   backgroundUrl?: string;
 };
 
+const dataUrlToBlob = (dataUrl: string, fallbackType = 'application/octet-stream') => {
+  if (!dataUrl || typeof dataUrl !== 'string') return new Blob([], { type: fallbackType });
+  const [meta, base64 = ''] = dataUrl.split(',');
+  const mimeMatch = /^data:(.*?);/.exec(meta || '');
+  const mime = mimeMatch?.[1] || fallbackType;
+  try {
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new Blob([bytes.buffer], { type: mime });
+  } catch (error) {
+    console.warn('Failed to decode cached diy model', error);
+    return new Blob([], { type: fallbackType });
+  }
+};
+
 const ModelViewerPage = ({ baseModelUrl, diyModelUrl, backgroundUrl }: ModelViewerPageProps) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [loadingProgress, setLoadingProgress] = useState(0);
+  const [cachedDiyUrl, setCachedDiyUrl] = useState<string | undefined>(undefined);
+  const cachedUrlRef = useRef<string | null>(null);
   const beadInstancesRef = useRef<BeadInstance[]>([]);
   const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const raw = window.localStorage?.getItem(DIY_MODEL_CACHE_KEY);
+    if (raw) {
+      try {
+        const payload = JSON.parse(raw);
+        if (payload?.dataUrl) {
+          const blob = dataUrlToBlob(payload.dataUrl, payload.type || 'model/gltf-binary');
+          if (blob.size > 0) {
+            const objectUrl = URL.createObjectURL(blob);
+            cachedUrlRef.current = objectUrl;
+            setCachedDiyUrl(objectUrl);
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to restore cached diy model', error);
+      }
+    }
+    return () => {
+      if (cachedUrlRef.current) {
+        URL.revokeObjectURL(cachedUrlRef.current);
+      }
+    };
+  }, []);
 
   const { resolvedBaseModelUrl, resolvedDiyModelUrl, resolvedBgUrl } = useMemo(() => {
     const decodeOrRaw = (value: string | null) => {
@@ -51,6 +98,7 @@ const ModelViewerPage = ({ baseModelUrl, diyModelUrl, backgroundUrl }: ModelView
       DEFAULT_HUMAN_MODEL;
 
     const resolvedDiy =
+      cachedDiyUrl ||
       diyModelUrl ||
       decodeOrRaw(searchParams?.get('diyModel')) ||
       decodeOrRaw(searchParams?.get('diy')) ||
@@ -63,7 +111,7 @@ const ModelViewerPage = ({ baseModelUrl, diyModelUrl, backgroundUrl }: ModelView
       DEFAULT_BG_IMAGE;
 
     return { resolvedBaseModelUrl: resolvedBase, resolvedDiyModelUrl: resolvedDiy, resolvedBgUrl: resolvedBg };
-  }, [searchParams, baseModelUrl, diyModelUrl, backgroundUrl]);
+  }, [searchParams, baseModelUrl, diyModelUrl, backgroundUrl, cachedDiyUrl]);
 
   useEffect(() => {
     if (!mountRef.current) return;
