@@ -8,6 +8,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 
 const DEFAULT_HUMAN_MODEL = '/static/models/Human-Arm-Animation.gltf';
 const DEFAULT_DIY_MODEL = '/static/diy.gltf';
+const DEFAULT_BG_IMAGE = '/static/background.png';
 const DEFAULT_PLAYBACK_WINDOW = { startRatio: 0.35, endRatio: 0.44 };
 const DEFAULT_TARGET_DURATION = 1.6; // seconds
 const HUMAN_TRANSFORM = {
@@ -20,14 +21,20 @@ type BeadInstance = {
   object: THREE.Object3D;
 };
 
-const ModelViewerPage = () => {
+type ModelViewerPageProps = {
+  baseModelUrl?: string;
+  diyModelUrl?: string;
+  backgroundUrl?: string;
+};
+
+const ModelViewerPage = ({ baseModelUrl, diyModelUrl, backgroundUrl }: ModelViewerPageProps) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const beadInstancesRef = useRef<BeadInstance[]>([]);
   const searchParams = useSearchParams();
 
-  const { baseModelUrl, diyModelUrl } = useMemo(() => {
+  const { resolvedBaseModelUrl, resolvedDiyModelUrl, resolvedBgUrl } = useMemo(() => {
     const decodeOrRaw = (value: string | null) => {
       if (!value) return value;
       try {
@@ -38,17 +45,25 @@ const ModelViewerPage = () => {
     };
 
     const resolvedBase =
+      baseModelUrl ||
       decodeOrRaw(searchParams?.get('humanModel')) ||
       decodeOrRaw(searchParams?.get('baseModel')) ||
       DEFAULT_HUMAN_MODEL;
 
     const resolvedDiy =
+      diyModelUrl ||
       decodeOrRaw(searchParams?.get('diyModel')) ||
       decodeOrRaw(searchParams?.get('diy')) ||
       DEFAULT_DIY_MODEL;
 
-    return { baseModelUrl: resolvedBase, diyModelUrl: resolvedDiy };
-  }, [searchParams]);
+    const resolvedBg =
+      backgroundUrl ||
+      decodeOrRaw(searchParams?.get('bg')) ||
+      decodeOrRaw(searchParams?.get('background')) ||
+      DEFAULT_BG_IMAGE;
+
+    return { resolvedBaseModelUrl: resolvedBase, resolvedDiyModelUrl: resolvedDiy, resolvedBgUrl: resolvedBg };
+  }, [searchParams, baseModelUrl, diyModelUrl, backgroundUrl]);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -64,7 +79,7 @@ const ModelViewerPage = () => {
     const scene = new THREE.Scene();
 
     // Background texture
-    const bgTexture = new THREE.TextureLoader().load('/static/background.png', (tex) => {
+    const bgTexture = new THREE.TextureLoader().load(resolvedBgUrl, (tex) => {
       tex.colorSpace = THREE.SRGBColorSpace;
     });
     scene.background = bgTexture;
@@ -116,7 +131,7 @@ const ModelViewerPage = () => {
     let animationId = 0;
 
     loader.load(
-      baseModelUrl,
+      resolvedBaseModelUrl,
       (gltf) => {
         if (disposed) return;
         const model = gltf.scene;
@@ -177,7 +192,7 @@ const ModelViewerPage = () => {
 
           const diyLoader = new GLTFLoader();
           diyLoader.load(
-            diyModelUrl,
+          resolvedDiyModelUrl,
             (diyGltf) => {
               if (disposed) return;
               const diyRoot = new THREE.Group();
@@ -321,7 +336,7 @@ const ModelViewerPage = () => {
       (error) => {
         console.error('An error happened during loading:', error);
         if (!disposed) {
-          setLoadingError(`Failed to load base model: ${baseModelUrl}. Check console for details.`);
+          setLoadingError(`Failed to load base model: ${resolvedBaseModelUrl}. Check console for details.`);
         }
       }
     );
@@ -372,7 +387,7 @@ const ModelViewerPage = () => {
       renderer.dispose();
       beadInstancesRef.current = [];
     };
-  }, [baseModelUrl, diyModelUrl]);
+  }, [resolvedBaseModelUrl, resolvedDiyModelUrl, resolvedBgUrl]);
 
   return (
     <div
@@ -382,6 +397,9 @@ const ModelViewerPage = () => {
         position: 'fixed',
         top: 0,
         left: 0,
+        overflow: 'hidden',
+        touchAction: 'none',
+        overscrollBehavior: 'none',
         margin: 0,
         padding: 0,
       }}

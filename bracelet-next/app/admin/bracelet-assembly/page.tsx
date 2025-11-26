@@ -6,6 +6,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
+type BraceletAssemblyProps = {
+  onFinished?: () => void;
+  diyModelUrl?: string;
+  backgroundUrl?: string;
+  backgroundColor?: THREE.ColorRepresentation;
+};
+
 type AnimatedBead = {
   object: THREE.Object3D;
   startTime: number;
@@ -48,7 +55,12 @@ const DETAIL_RADIUS_GAP_FACTOR = 2; // 细节模式下基于珠子直径额外�
 const DETAIL_GROUP_LIFT = 0.5; // 细节模式整体沿法线抬升比例（乘以半径）
 const RING_RADIUS_EXTRA = 0.5; // 仅放大绳子/圆圈的半径增量（米），不影响珠子
 
-const BraceletAssemblyPage = () => {
+const BraceletAssemblyPage = ({
+  onFinished,
+  diyModelUrl: diyModelUrlProp,
+  backgroundUrl,
+  backgroundColor,
+}: BraceletAssemblyProps) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const braceletGroupRef = useRef<THREE.Group | null>(null);
   const ringBasisRef = useRef<{
@@ -75,6 +87,7 @@ const BraceletAssemblyPage = () => {
   const detailProgressRef = useRef(0);
   const spinProgressRef = useRef(0);
   const spinTargetRef = useRef(0);
+  const finishedRef = useRef(false);
   const searchParams = useSearchParams();
 
   const { diyModelUrl, braceletScale, braceletOffset, camRadius, camYaw, camPitch, spinSpeed, spinTurns } = useMemo(() => {
@@ -85,8 +98,8 @@ const BraceletAssemblyPage = () => {
     };
 
     const raw = searchParams?.get('diyModel') || searchParams?.get('diy');
-    let url = DEFAULT_DIY_MODEL;
-    if (raw) {
+    let url = diyModelUrlProp || DEFAULT_DIY_MODEL;
+    if (!diyModelUrlProp && raw) {
       try {
         url = decodeURIComponent(raw);
       } catch {
@@ -114,7 +127,7 @@ const BraceletAssemblyPage = () => {
       spinSpeed: spin,
       spinTurns: turns,
     };
-  }, [searchParams]);
+  }, [searchParams, diyModelUrlProp]);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -127,12 +140,34 @@ const BraceletAssemblyPage = () => {
     detailPhaseStartRef.current = 0;
     spinProgressRef.current = 0;
     spinTargetRef.current = 0;
+    finishedRef.current = false;
 
     let disposed = false;
     let animationId = 0;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0c0d0f);
+    const fallbackBg = backgroundColor ?? 0x0c0d0f;
+    const texLoader = new THREE.TextureLoader();
+    let bgTexture: THREE.Texture | null = null;
+    if (backgroundUrl) {
+      try {
+        bgTexture = texLoader.load(
+          backgroundUrl,
+          (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            scene.background = tex;
+          },
+          undefined,
+          () => {
+            scene.background = new THREE.Color(fallbackBg);
+          }
+        );
+      } catch {
+        scene.background = new THREE.Color(fallbackBg);
+      }
+    } else {
+      scene.background = new THREE.Color(fallbackBg);
+    }
 
     const braceletGroup = new THREE.Group();
     scene.add(braceletGroup);
@@ -495,6 +530,17 @@ const BraceletAssemblyPage = () => {
         }
       }
 
+      const spinDone =
+        spinProgressRef.current >= spinTargetRef.current - 1e-6 ||
+        spinTargetRef.current <= 1e-6 ||
+        spinSpeed <= 1e-6;
+      if (!finishedRef.current && detailPhaseRef.current === 'done' && spinDone) {
+        finishedRef.current = true;
+        if (onFinished) {
+          Promise.resolve().then(() => onFinished());
+        }
+      }
+
       applyCamera(detailFactor);
       renderer.render(scene, camera);
     };
@@ -516,6 +562,9 @@ const BraceletAssemblyPage = () => {
       if (mountRef.current && renderer.domElement) {
         mountRef.current.removeChild(renderer.domElement);
       }
+      if (bgTexture) {
+        bgTexture.dispose();
+      }
       pmremGenerator.dispose();
       envMap.dispose?.();
       scene.traverse((obj) => {
@@ -531,7 +580,19 @@ const BraceletAssemblyPage = () => {
       renderer.dispose();
       beadAnimationsRef.current = [];
     };
-  }, [diyModelUrl, braceletScale, braceletOffset, camRadius, camYaw, camPitch, spinSpeed, spinTurns]);
+  }, [
+    diyModelUrl,
+    braceletScale,
+    braceletOffset,
+    camRadius,
+    camYaw,
+    camPitch,
+    spinSpeed,
+    spinTurns,
+    onFinished,
+    backgroundColor,
+    backgroundUrl,
+  ]);
 
   return (
     <div
@@ -541,28 +602,14 @@ const BraceletAssemblyPage = () => {
         position: 'fixed',
         top: 0,
         left: 0,
+        overflow: 'hidden',
+        touchAction: 'none',
+        overscrollBehavior: 'none',
         margin: 0,
         padding: 0,
       }}
     >
-      <div
-        style={{
-          position: 'absolute',
-          top: 10,
-          left: 10,
-          zIndex: 10,
-          background: 'rgba(0,0,0,0.55)',
-          color: 'white',
-          padding: '10px',
-          borderRadius: '5px',
-          fontSize: '12px',
-          lineHeight: '16px',
-        }}
-      >
-        <div>手串装配动画（无手模）</div>
-        {loadingProgress < 100 && <div>Loading: {Math.round(loadingProgress)}%</div>}
-        {loadingError && <div style={{ color: 'red' }}>{loadingError}</div>}
-      </div>
+     
       <div ref={mountRef} style={{ width: '100%', height: '100%' }} />
     </div>
   );
