@@ -22,10 +22,15 @@ type AnimatedBead = {
 };
 
 const DEFAULT_DIY_MODEL = '/static/diy.gltf';
-const DEFAULT_RING_RADIUS = 0.065; // meters (6.5 cm)
+const DEFAULT_RING_RADIUS = 0.165; // meters (6.5 cm)
 const DEFAULT_HEIGHT = 0.02;
-const DEFAULT_BRACELET_SCALE = 1;
+const DEFAULT_BRACELET_SCALE = 1.85;
+const DEFAULT_CAM_RADIUS = 0.28;
+const DEFAULT_CAM_YAW = 0; // 0 -> 面向 +Z
+const DEFAULT_CAM_PITCH = 0; // 抬头角度（弧度）
 const DEFAULT_BRACELET_OFFSET: [number, number, number] = [0, 0, 0];
+const DEFAULT_PER_BEAD_DELAY = 0.45; // 每颗珠子出现的时间间隔（秒）
+const DEFAULT_FLIGHT_DURATION = 1; // 单颗珠子滑动到位所需时间（秒）
 
 const BraceletAssemblyPage = () => {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -47,7 +52,7 @@ const BraceletAssemblyPage = () => {
   const beadAnimationsRef = useRef<AnimatedBead[]>([]);
   const searchParams = useSearchParams();
 
-  const { diyModelUrl, braceletScale, braceletOffset } = useMemo(() => {
+  const { diyModelUrl, braceletScale, braceletOffset, camRadius, camYaw, camPitch } = useMemo(() => {
     const parseNumber = (v: string | null, fallback: number) => {
       if (v === null || v === undefined) return fallback;
       const n = parseFloat(v);
@@ -68,11 +73,17 @@ const BraceletAssemblyPage = () => {
     const offsetX = parseNumber(searchParams?.get('offsetX'), DEFAULT_BRACELET_OFFSET[0]);
     const offsetY = parseNumber(searchParams?.get('offsetY'), DEFAULT_BRACELET_OFFSET[1]);
     const offsetZ = parseNumber(searchParams?.get('offsetZ'), DEFAULT_BRACELET_OFFSET[2]);
+    const camR = parseNumber(searchParams?.get('camR'), DEFAULT_CAM_RADIUS);
+    const camYawVal = parseNumber(searchParams?.get('camYaw'), DEFAULT_CAM_YAW);
+    const camPitchVal = parseNumber(searchParams?.get('camPitch'), DEFAULT_CAM_PITCH);
 
     return {
       diyModelUrl: url,
       braceletScale: scale,
       braceletOffset: new THREE.Vector3(offsetX, offsetY, offsetZ),
+      camRadius: camR,
+      camYaw: camYawVal,
+      camPitch: camPitchVal,
     };
   }, [searchParams]);
 
@@ -121,6 +132,21 @@ const BraceletAssemblyPage = () => {
 
     const loader = new GLTFLoader();
     const clock = new THREE.Clock();
+    const applyCamera = () => {
+      const { center, radius } = ringBasisRef.current;
+      const r = camRadius || radius * 3;
+      const yaw = camYaw;
+      const pitch = camPitch;
+      const horizontal = r * Math.cos(pitch);
+      const target = center;
+      const pos = new THREE.Vector3(
+        target.x + horizontal * Math.sin(yaw),
+        target.y + r * Math.sin(pitch),
+        target.z + horizontal * Math.cos(yaw)
+      );
+      camera.position.copy(pos);
+      camera.lookAt(target);
+    };
 
     const collectBeads = (root: THREE.Object3D) => {
       type BeadSource = {
@@ -221,8 +247,8 @@ const BraceletAssemblyPage = () => {
         .add(normal.clone().multiplyScalar(0.01)); // 固定出现点，略微抬高
       const twoPi = Math.PI * 2;
       const baseStart = clock.getElapsedTime();
-      const perBeadDelay = 0.35; // 放慢节奏
-      const flightDuration = 1.6; // 每颗滑动更慢
+      const perBeadDelay = DEFAULT_PER_BEAD_DELAY;
+      const flightDuration = DEFAULT_FLIGHT_DURATION;
       const arcHeightBase = 0; // 轨迹紧贴圆圈平面，不抬高
 
       sources.forEach((source, index) => {
@@ -268,6 +294,7 @@ const BraceletAssemblyPage = () => {
       });
 
       beadAnimationsRef.current = beads;
+      applyCamera();
     };
 
     loader.load(
@@ -338,6 +365,7 @@ const BraceletAssemblyPage = () => {
       camera.aspect = mountRef.current.clientWidth / mountRef.current.clientHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
+      applyCamera();
     };
     window.addEventListener('resize', handleResize);
 
@@ -363,7 +391,7 @@ const BraceletAssemblyPage = () => {
       renderer.dispose();
       beadAnimationsRef.current = [];
     };
-  }, [diyModelUrl, braceletScale, braceletOffset]);
+  }, [diyModelUrl, braceletScale, braceletOffset, camRadius, camYaw, camPitch]);
 
   return (
     <div
