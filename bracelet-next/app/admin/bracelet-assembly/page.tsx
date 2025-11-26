@@ -19,6 +19,7 @@ type AnimatedBead = {
   startQuat: THREE.Quaternion;
   targetQuat: THREE.Quaternion;
   arcHeight: number;
+  baseScale: THREE.Vector3;
 };
 
 const DEFAULT_DIY_MODEL = '/static/diy.gltf';
@@ -29,27 +30,44 @@ const DEFAULT_CAM_RADIUS = 0.28;
 const DEFAULT_CAM_YAW = 0; // 0 -> 面向 +Z
 const DEFAULT_CAM_PITCH = 0; // 抬头角度（弧度）
 const DEFAULT_BRACELET_OFFSET: [number, number, number] = [0, 0, 0];
-const DEFAULT_PER_BEAD_DELAY = 0.45; // 每颗珠子出现的时间间隔（秒）
-const DEFAULT_FLIGHT_DURATION = 1; // 单颗珠子滑动到位所需时间（秒）
+const DEFAULT_PER_BEAD_DELAY = 0.35; // 每颗珠子出现的时间间隔（秒）
+const DEFAULT_FLIGHT_DURATION = 0.15; // 单颗珠子滑动到位所需时间（秒）
+const DETAIL_SCALE = 2; // 放大倍数
+const DETAIL_RADIUS_BOOST = 0; // 细节模式半径额外放大比例（保持为 0 让珠子与绳子对齐）
+const DETAIL_CAM_RADIUS = 0.18; // 细节视角相机距离
+const DETAIL_CAM_PITCH = 0.9; // 细节视角俯仰
+const DETAIL_TARGET_LIFT = 0.5; // 细节视角目标上移倍数（乘以半径）
+const DETAIL_DELAY = 0.3; // 完成后停顿
+const DETAIL_ZOOM_IN = 0.6;
+const DETAIL_HOLD = 5.8;
+const DETAIL_ZOOM_OUT = 0.6;
+const DETAIL_RADIUS_GAP_FACTOR = 2; // 细节模式下基于珠子直径额外腾出的比例
 
 const BraceletAssemblyPage = () => {
   const mountRef = useRef<HTMLDivElement>(null);
+  const braceletGroupRef = useRef<THREE.Group | null>(null);
   const ringBasisRef = useRef<{
     center: THREE.Vector3;
     normal: THREE.Vector3;
     topDir: THREE.Vector3;
     sideDir: THREE.Vector3;
     radius: number;
+    avgDiameter: number;
   }>({
     center: new THREE.Vector3(0, DEFAULT_HEIGHT, 0),
     normal: new THREE.Vector3(0, 1, 0),
     topDir: new THREE.Vector3(0, 0, 1),
     sideDir: new THREE.Vector3(1, 0, 0),
     radius: DEFAULT_RING_RADIUS,
+    avgDiameter: DEFAULT_RING_RADIUS * 0.02,
   });
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const beadAnimationsRef = useRef<AnimatedBead[]>([]);
+  const sequenceEndRef = useRef(0);
+  const detailPhaseRef = useRef<'idle' | 'zoomIn' | 'hold' | 'zoomOut' | 'done'>('idle');
+  const detailPhaseStartRef = useRef(0);
+  const detailProgressRef = useRef(0);
   const searchParams = useSearchParams();
 
   const { diyModelUrl, braceletScale, braceletOffset, camRadius, camYaw, camPitch } = useMemo(() => {
@@ -93,12 +111,19 @@ const BraceletAssemblyPage = () => {
     setLoadingError(null);
     setLoadingProgress(0);
     beadAnimationsRef.current = [];
+    sequenceEndRef.current = 0;
+    detailPhaseRef.current = 'idle';
+    detailPhaseStartRef.current = 0;
 
     let disposed = false;
     let animationId = 0;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0c0d0f);
+
+    const braceletGroup = new THREE.Group();
+    scene.add(braceletGroup);
+    braceletGroupRef.current = braceletGroup;
 
     const camera = new THREE.PerspectiveCamera(
       55,
@@ -132,13 +157,21 @@ const BraceletAssemblyPage = () => {
 
     const loader = new GLTFLoader();
     const clock = new THREE.Clock();
-    const applyCamera = () => {
+    const applyCamera = (detailFactor: number) => {
       const { center, radius } = ringBasisRef.current;
-      const r = camRadius || radius * 3;
-      const yaw = camYaw;
-      const pitch = camPitch;
+      const baseR = camRadius || radius * 3;
+      const baseYaw = camYaw;
+      const basePitch = camPitch;
+      const targetR = DETAIL_CAM_RADIUS || baseR * 0.6;
+      const targetYaw = baseYaw;
+      const targetPitch = DETAIL_CAM_PITCH;
+      const r = THREE.MathUtils.lerp(baseR, targetR, detailFactor);
+      const yaw = THREE.MathUtils.lerp(baseYaw, targetYaw, detailFactor);
+      const pitch = THREE.MathUtils.lerp(basePitch, targetPitch, detailFactor);
       const horizontal = r * Math.cos(pitch);
-      const target = center;
+      const target = center
+        .clone()
+        .add(ringBasisRef.current.normal.clone().multiplyScalar(detailFactor * radius * DETAIL_TARGET_LIFT));
       const pos = new THREE.Vector3(
         target.x + horizontal * Math.sin(yaw),
         target.y + r * Math.sin(pitch),
@@ -159,6 +192,8 @@ const BraceletAssemblyPage = () => {
 
       const sources: BeadSource[] = [];
       const center = new THREE.Vector3();
+      let diameterSum = 0;
+      let diameterCount = 0;
 
       root.traverse((obj) => {
         const extras = (obj as any).userData || {};
@@ -167,6 +202,11 @@ const BraceletAssemblyPage = () => {
         const targetQuat = obj.getWorldQuaternion(new THREE.Quaternion());
         const targetScale = obj.getWorldScale(new THREE.Vector3());
         center.add(targetPos);
+        const bounds = extras.bounds as { diameter?: number } | undefined;
+        if (bounds?.diameter) {
+          diameterSum += bounds.diameter;
+          diameterCount += 1;
+        }
         sources.push({ obj, extras, targetPos, targetQuat, targetScale });
       });
 
@@ -215,6 +255,8 @@ const BraceletAssemblyPage = () => {
         }
       });
       const ringRadius = radiusCount > 0 ? radiusSum / radiusCount : DEFAULT_RING_RADIUS;
+      const avgDiameter =
+        diameterCount > 0 ? diameterSum / diameterCount : Math.max(0.0005, ringRadius * 0.02);
 
       ringBasisRef.current = {
         center,
@@ -222,6 +264,7 @@ const BraceletAssemblyPage = () => {
         topDir,
         sideDir,
         radius: ringRadius,
+        avgDiameter,
       };
 
       // Sort by arcStart/currentAngle to place beads around the ring in order.
@@ -269,7 +312,7 @@ const BraceletAssemblyPage = () => {
         beadClone.quaternion.copy(source.targetQuat);
         beadClone.scale.copy(source.targetScale);
         beadClone.visible = false;
-        scene.add(beadClone);
+        braceletGroup.add(beadClone);
 
         const bounds = source.extras?.bounds as { diameter?: number } | undefined;
         const arcHeight = arcHeightBase; // 可以按需改成 bounds.diameter 调整抬升
@@ -287,6 +330,7 @@ const BraceletAssemblyPage = () => {
           startQuat: source.targetQuat.clone(),
           targetQuat: source.targetQuat.clone(),
           arcHeight,
+          baseScale: source.targetScale.clone(),
         });
 
         // Hide original bead
@@ -294,7 +338,12 @@ const BraceletAssemblyPage = () => {
       });
 
       beadAnimationsRef.current = beads;
-      applyCamera();
+      sequenceEndRef.current =
+        beads.length > 0 ? baseStart + (beads.length - 1) * perBeadDelay + flightDuration : 0;
+      detailPhaseRef.current = 'idle';
+      detailPhaseStartRef.current = 0;
+      applyCamera(0);
+      detailProgressRef.current = 0;
     };
 
     loader.load(
@@ -309,7 +358,7 @@ const BraceletAssemblyPage = () => {
         );
         diyRoot.rotation.set(0, 0, 0);
         diyRoot.scale.set(braceletScale, braceletScale, braceletScale);
-        scene.add(diyRoot);
+        braceletGroup.add(diyRoot);
 
         diyRoot.updateMatrixWorld(true);
         collectBeads(diyRoot);
@@ -330,6 +379,48 @@ const BraceletAssemblyPage = () => {
       if (disposed) return;
       animationId = requestAnimationFrame(animate);
       const now = clock.getElapsedTime();
+
+      // 细节阶段管理
+      let detailFactor = 0;
+      if (sequenceEndRef.current > 0) {
+        const phase = detailPhaseRef.current;
+        if (phase === 'idle' && now >= sequenceEndRef.current + DETAIL_DELAY) {
+          detailPhaseRef.current = 'zoomIn';
+          detailPhaseStartRef.current = now;
+        }
+        if (detailPhaseRef.current === 'zoomIn') {
+          const p = Math.min(1, (now - detailPhaseStartRef.current) / DETAIL_ZOOM_IN);
+          detailFactor = p;
+          if (p >= 1) {
+            detailPhaseRef.current = 'hold';
+            detailPhaseStartRef.current = now;
+          }
+        } else if (detailPhaseRef.current === 'hold') {
+          detailFactor = 1;
+          if (now - detailPhaseStartRef.current >= DETAIL_HOLD) {
+            detailPhaseRef.current = 'zoomOut';
+            detailPhaseStartRef.current = now;
+          }
+        } else if (detailPhaseRef.current === 'zoomOut') {
+          const p = Math.min(1, (now - detailPhaseStartRef.current) / DETAIL_ZOOM_OUT);
+          detailFactor = 1 - p;
+          if (p >= 1) {
+            detailPhaseRef.current = 'done';
+          }
+        } else if (detailPhaseRef.current === 'done') {
+          detailFactor = 0;
+        }
+      }
+
+      // 应用整体缩放（包含细节放大 + 间隙带来的环增大）
+      const { radius, avgDiameter } = ringBasisRef.current;
+      const gapDelta = detailFactor * ((DETAIL_RADIUS_GAP_FACTOR * (avgDiameter || 0)) / Math.max(radius, 1e-6));
+      const detailScale = 1 + detailFactor * (DETAIL_SCALE - 1);
+      const groupScale = detailScale * (1 + gapDelta);
+      if (braceletGroupRef.current) {
+        braceletGroupRef.current.scale.setScalar(groupScale);
+      }
+      detailProgressRef.current = detailFactor;
 
       if (beadAnimationsRef.current.length) {
         const { center, normal, topDir, sideDir, radius } = ringBasisRef.current;
@@ -352,10 +443,13 @@ const BraceletAssemblyPage = () => {
             .add(center);
           // 不叠加高度，轨迹贴合圈所在平面
           item.object.position.copy(pos);
+          const beadScaleFactor = 1 / (1 + gapDelta); // 抵消环变大带来的珠子放大，让珠子看起来更小从而显出间隙
+          item.object.scale.copy(item.baseScale).multiplyScalar(beadScaleFactor);
           item.object.quaternion.slerpQuaternions(item.startQuat, item.targetQuat, eased);
         });
       }
 
+      applyCamera(detailFactor);
       renderer.render(scene, camera);
     };
     animate();
@@ -365,7 +459,7 @@ const BraceletAssemblyPage = () => {
       camera.aspect = mountRef.current.clientWidth / mountRef.current.clientHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
-      applyCamera();
+      applyCamera(detailProgressRef.current);
     };
     window.addEventListener('resize', handleResize);
 
