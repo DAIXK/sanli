@@ -309,9 +309,8 @@ const BraceletAssemblyPage = () => {
         beadAnimationsRef.current.forEach((item) => {
           const t = (now - item.startTime) / item.duration;
           if (t <= 0) {
-            item.object.visible = true;
-            item.object.position.copy(item.spawnPos);
-            item.object.quaternion.copy(item.startQuat);
+            // 隐藏等待中的珠子，避免 spawnPos 处叠加
+            item.object.visible = false;
             return;
           }
           const clamped = Math.min(1, t);
