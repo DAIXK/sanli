@@ -30,16 +30,17 @@ const DEFAULT_CAM_RADIUS = 0.28;
 const DEFAULT_CAM_YAW = 0; // 0 -> 面向 +Z
 const DEFAULT_CAM_PITCH = 0; // 抬头角度（弧度）
 const DEFAULT_BRACELET_OFFSET: [number, number, number] = [0, 0, 0];
-const DEFAULT_PER_BEAD_DELAY = 0.35; // 每颗珠子出现的时间间隔（秒）
+const DEFAULT_PER_BEAD_DELAY = 0.18; // 每颗珠子出现的时间间隔（秒）
 const DEFAULT_FLIGHT_DURATION = 0.15; // 单颗珠子滑动到位所需时间（秒）
 const DETAIL_SCALE = 2; // 放大倍数
 const DETAIL_RADIUS_BOOST = 0; // 细节模式半径额外放大比例（保持为 0 让珠子与绳子对齐）
 const DETAIL_CAM_RADIUS = 0.18; // 细节视角相机距离
-const DETAIL_CAM_PITCH = 0.9; // 细节视角俯仰
-const DETAIL_TARGET_LIFT = 0.5; // 细节视角目标上移倍数（乘以半径）
+const DETAIL_CAM_PITCH = 0; // 细节阶段保持正面角度
+const DETAIL_TARGET_LIFT = 0.2; // 沿法线微抬镜头目标
+const DETAIL_TOP_LIFT = 3.2; // 沿 topDir 提升视点，突出顶部珠子
 const DETAIL_DELAY = 0.3; // 完成后停顿
 const DETAIL_ZOOM_IN = 0.6;
-const DETAIL_HOLD = 5.8;
+const DETAIL_HOLD = 3.8;
 const DETAIL_ZOOM_OUT = 0.6;
 const DETAIL_RADIUS_GAP_FACTOR = 2; // 细节模式下基于珠子直径额外腾出的比例
 
@@ -158,7 +159,7 @@ const BraceletAssemblyPage = () => {
     const loader = new GLTFLoader();
     const clock = new THREE.Clock();
     const applyCamera = (detailFactor: number) => {
-      const { center, radius } = ringBasisRef.current;
+      const { center, radius, topDir, normal } = ringBasisRef.current;
       const baseR = camRadius || radius * 3;
       const baseYaw = camYaw;
       const basePitch = camPitch;
@@ -171,7 +172,8 @@ const BraceletAssemblyPage = () => {
       const horizontal = r * Math.cos(pitch);
       const target = center
         .clone()
-        .add(ringBasisRef.current.normal.clone().multiplyScalar(detailFactor * radius * DETAIL_TARGET_LIFT));
+        .add(normal.clone().multiplyScalar(detailFactor * radius * DETAIL_TARGET_LIFT))
+        .add(topDir.clone().multiplyScalar(detailFactor * radius * DETAIL_TOP_LIFT));
       const pos = new THREE.Vector3(
         target.x + horizontal * Math.sin(yaw),
         target.y + r * Math.sin(pitch),
