@@ -434,10 +434,6 @@ const stopAssemblyStage = () => {
     assemblyCleanup()
     assemblyCleanup = null
   }
-  if (activeAssemblyObjectUrl) {
-    revokeCachedObjectUrl(activeAssemblyObjectUrl)
-    activeAssemblyObjectUrl = ''
-  }
   assemblyInitialized.value = false
 }
 
@@ -445,10 +441,6 @@ const stopViewerStage = () => {
   if (viewerCleanup) {
     viewerCleanup()
     viewerCleanup = null
-  }
-  if (activeViewerObjectUrl) {
-    revokeCachedObjectUrl(activeViewerObjectUrl)
-    activeViewerObjectUrl = ''
   }
   viewerInitialized.value = false
 }
