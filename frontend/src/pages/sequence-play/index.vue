@@ -1,7 +1,17 @@
 <template>
-  <view class="page">
-    <view v-show="stage === 'assembly'" class="canvas-container" ref="assemblyMountRef"></view>
-    <view v-show="stage === 'viewer'" class="canvas-container" ref="viewerMountRef"></view>
+  <view class="page" :style="pageStyle">
+    <view
+      v-show="stage === 'assembly'"
+      class="canvas-container"
+      :style="containerStyle"
+      ref="assemblyMountRef"
+    ></view>
+    <view
+      v-show="stage === 'viewer'"
+      class="canvas-container"
+      :style="containerStyle"
+      ref="viewerMountRef"
+    ></view>
     <view class="stage-indicator">{{ stageLabel }}</view>
     <view class="toast" v-if="loadingText">{{ loadingText }}</view>
     <view class="error" v-if="errorText">{{ errorText }}</view>
@@ -16,7 +26,8 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 
 const DIY_CACHE_KEY = 'bracelet_diy_model_cache'
 const DEFAULT_BASE_MODEL = '/static/models/Human-Arm-Animation.gltf'
-const DEFAULT_BG = '/static/background.png'
+const DEFAULT_BG = '/static/img/background.png'
+const VIDEO_FILE_REGEX = /\.(mp4|webm|ogg|m4v)$/i
 
 // Assembly defaults
 const DEFAULT_RING_RADIUS = 1.185
@@ -51,6 +62,32 @@ const errorText = ref('')
 const stageLabel = computed(() =>
   stage.value === 'assembly' ? '组装展示中...' : '佩戴展示中...'
 )
+const containerStyle = computed(() => {
+  const bgUrl =
+    stage.value === 'assembly'
+      ? sequenceConfig.value.assemblyBg || DEFAULT_BG
+      : sequenceConfig.value.viewerBg || DEFAULT_BG
+  const isVideoBg = VIDEO_FILE_REGEX.test(bgUrl || '')
+  return {
+    backgroundImage: !isVideoBg && bgUrl ? `url(${bgUrl})` : 'none',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat'
+  }
+})
+const pageStyle = computed(() => {
+  const bgUrl =
+    stage.value === 'assembly'
+      ? sequenceConfig.value.assemblyBg || DEFAULT_BG
+      : sequenceConfig.value.viewerBg || DEFAULT_BG
+  const isVideoBg = VIDEO_FILE_REGEX.test(bgUrl || '')
+  return {
+    backgroundColor: '#000',
+    backgroundImage: !isVideoBg && bgUrl ? `url(${bgUrl})` : 'none',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center'
+  }
+})
 
 const cachedDiyPayloadRef = ref(null)
 const cachedObjectUrls = new Set()
@@ -158,6 +195,78 @@ const revokeCachedObjectUrl = (url) => {
   if (cachedObjectUrls.has(url)) {
     URL.revokeObjectURL(url)
     cachedObjectUrls.delete(url)
+  }
+}
+
+const setupSceneBackground = (scene, url, fallbackColor = 0x000000) => {
+  let videoEl = null
+  let videoTexture = null
+  let texture = null
+  const applyFallback = () => {
+    scene.background = new THREE.Color(fallbackColor)
+  }
+  applyFallback()
+  if (url && VIDEO_FILE_REGEX.test(url)) {
+    try {
+      const video = document.createElement('video')
+      video.src = url
+      video.loop = true
+      video.muted = true
+      video.autoplay = true
+      video.playsInline = true
+      video.crossOrigin = 'anonymous'
+      const playPromise = video.play()
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch((error) => {
+          console.warn('视频背景播放失败', error)
+        })
+      }
+      videoTexture = new THREE.VideoTexture(video)
+      videoTexture.colorSpace = THREE.SRGBColorSpace
+      videoTexture.needsUpdate = true
+      scene.background = videoTexture
+      videoEl = video
+    } catch (error) {
+      console.warn('视频背景初始化失败', error)
+      applyFallback()
+    }
+  } else if (url) {
+    const loader = new THREE.TextureLoader()
+    try {
+      texture = loader.load(
+        url,
+        (tex) => {
+          tex.colorSpace = THREE.SRGBColorSpace
+          scene.background = tex
+        },
+        undefined,
+        () => {
+          applyFallback()
+        }
+      )
+      if (!texture) {
+        applyFallback()
+      }
+    } catch (error) {
+      console.warn('图片背景加载失败', error)
+      applyFallback()
+    }
+  }
+  return () => {
+    if (videoTexture) {
+      videoTexture.dispose()
+      videoTexture = null
+    }
+    if (videoEl) {
+      videoEl.pause()
+      videoEl.src = ''
+      videoEl.load()
+      videoEl = null
+    }
+    if (texture) {
+      texture.dispose()
+      texture = null
+    }
   }
 }
 
@@ -402,28 +511,7 @@ const createAssemblyScene = (mountEl, options) => {
   const scene = new THREE.Scene()
   const clock = new THREE.Clock()
 
-  const texLoader = new THREE.TextureLoader()
-  let bgTexture = null
-  const fallbackColor = 0x0c0d0f
-  if (backgroundUrl) {
-    try {
-      bgTexture = texLoader.load(
-        backgroundUrl,
-        (tex) => {
-          tex.colorSpace = THREE.SRGBColorSpace
-          scene.background = tex
-        },
-        undefined,
-        () => {
-          scene.background = new THREE.Color(fallbackColor)
-        }
-      )
-    } catch {
-      scene.background = new THREE.Color(fallbackColor)
-    }
-  } else {
-    scene.background = new THREE.Color(fallbackColor)
-  }
+  const cleanupBackground = setupSceneBackground(scene, backgroundUrl, 0x000000)
 
   const braceletGroup = new THREE.Group()
   scene.add(braceletGroup)
@@ -443,6 +531,7 @@ const createAssemblyScene = (mountEl, options) => {
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1
+  renderer.setClearColor(new THREE.Color(0x000000), 0)
   mountEl.appendChild(renderer.domElement)
 
   const pmremGenerator = new THREE.PMREMGenerator(renderer)
@@ -801,9 +890,7 @@ const createAssemblyScene = (mountEl, options) => {
     if (mountEl && renderer.domElement?.parentNode === mountEl) {
       mountEl.removeChild(renderer.domElement)
     }
-    if (bgTexture) {
-      bgTexture.dispose()
-    }
+    cleanupBackground?.()
     pmremGenerator.dispose()
     envMap.dispose?.()
     scene.traverse((obj) => {
@@ -826,23 +913,7 @@ const createViewerScene = (mountEl, options) => {
   let disposed = false
   let animationId = 0
   const scene = new THREE.Scene()
-  const texLoader = new THREE.TextureLoader()
-  try {
-    const bgTex = texLoader.load(
-      backgroundUrl || DEFAULT_BG,
-      (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace
-        scene.background = tex
-      },
-      undefined,
-      () => {
-        scene.background = new THREE.Color(0x0c0d0f)
-      }
-    )
-    scene.background = bgTex
-  } catch {
-    scene.background = new THREE.Color(0x0c0d0f)
-  }
+  const cleanupBackground = setupSceneBackground(scene, backgroundUrl || DEFAULT_BG, 0x000000)
 
   const getSize = () => ({
     width: mountEl.clientWidth || mountEl.offsetWidth || 1,
@@ -859,6 +930,7 @@ const createViewerScene = (mountEl, options) => {
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.0
+  renderer.setClearColor(new THREE.Color(0x000000), 0)
   mountEl.appendChild(renderer.domElement)
 
   const pmremGenerator = new THREE.PMREMGenerator(renderer)
@@ -1086,6 +1158,7 @@ const createViewerScene = (mountEl, options) => {
         }
       }
     })
+    cleanupBackground?.()
     renderer.dispose()
   }
 }
