@@ -659,7 +659,12 @@ const createAssemblyScene = (mountEl, options) => {
       root.traverse((obj) => {
         const name = obj.name?.toLowerCase?.() || ''
         if (name.includes('rope') || name.includes('ring') || name.includes('circle')) {
+          const before = obj.getWorldPosition(new THREE.Vector3())
           obj.scale.multiplyScalar(ringScale)
+          obj.updateMatrixWorld(true)
+          const after = obj.getWorldPosition(new THREE.Vector3())
+          const delta = before.sub(after)
+          obj.position.add(delta)
           obj.updateMatrixWorld(true)
         }
       })
