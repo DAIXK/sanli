@@ -15,6 +15,15 @@
     <view class="stage-indicator">{{ stageLabel }}</view>
     <view class="toast" v-if="loadingText">{{ loadingText }}</view>
     <view class="error" v-if="errorText">{{ errorText }}</view>
+    
+    <!-- Download Button -->
+    <view 
+      class="download-btn" 
+      v-if="showDownloadBtn" 
+      @click="downloadVideo"
+    >
+      下载视频
+    </view>
   </view>
 </template>
 
@@ -115,6 +124,119 @@ const assemblyInitialized = ref(false)
 const viewerInitialized = ref(false)
 let assemblyCleanup = null
 let viewerCleanup = null
+
+// Recording state
+let recordingCanvas = null
+const mediaRecorder = ref(null)
+const recordedChunks = ref([])
+const showDownloadBtn = ref(false)
+const downloadUrl = ref('')
+const downloadExt = ref('webm')
+
+const startRecording = () => {
+  // Create canvas programmatically to avoid uni-app template issues
+  if (!recordingCanvas) {
+    recordingCanvas = document.createElement('canvas')
+  }
+  const canvas = recordingCanvas
+  
+  // Ensure canvas size matches design or screen
+  canvas.width = window.innerWidth * window.devicePixelRatio
+  canvas.height = window.innerHeight * window.devicePixelRatio
+
+  // Handle browser compatibility for captureStream
+  let stream = null
+  if (canvas.captureStream) {
+    stream = canvas.captureStream(60)
+  } else if (canvas.webkitCaptureStream) {
+    stream = canvas.webkitCaptureStream(60)
+  } else if (canvas.mozCaptureStream) {
+    stream = canvas.mozCaptureStream(60)
+  }
+
+  if (!stream) {
+    console.warn('MediaRecorder: captureStream not supported')
+    return
+  }
+
+  const mimeTypes = [
+    'video/mp4;codecs=avc1',
+    'video/mp4',
+    'video/webm;codecs=vp9',
+    'video/webm'
+  ]
+  let selectedMimeType = ''
+  for (const type of mimeTypes) {
+    if (MediaRecorder.isTypeSupported(type)) {
+      selectedMimeType = type
+      break
+    }
+  }
+  
+  if (!selectedMimeType) {
+    console.warn('MediaRecorder: No supported mime type found')
+    return
+  }
+  console.log('Recorder: using mime type', selectedMimeType)
+
+  try {
+    const recorder = new MediaRecorder(stream, {
+      mimeType: selectedMimeType
+    })
+    
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) {
+        recordedChunks.value.push(e.data)
+        // console.log('Recorder: chunk received', e.data.size)
+      }
+    }
+    
+    recorder.onstop = () => {
+      console.log('Recorder: stopped. Total chunks:', recordedChunks.value.length)
+      const blob = new Blob(recordedChunks.value, { type: selectedMimeType })
+      console.log('Recorder: blob created, size:', blob.size)
+      downloadUrl.value = URL.createObjectURL(blob)
+      // Store extension for download
+      downloadExt.value = selectedMimeType.includes('mp4') ? 'mp4' : 'webm'
+      showDownloadBtn.value = true
+      console.log('Recorder: download button should show')
+    }
+    
+    recorder.start()
+    mediaRecorder.value = recorder
+    console.log('Recorder: started')
+  } catch (error) {
+    console.warn('MediaRecorder init failed:', error)
+  }
+}
+
+const stopRecording = () => {
+  console.log('Recorder: stop requested')
+  if (mediaRecorder.value && mediaRecorder.value.state !== 'inactive') {
+    mediaRecorder.value.stop()
+  } else {
+    console.log('Recorder: cannot stop, state is', mediaRecorder.value?.state)
+  }
+}
+
+const downloadVideo = () => {
+  if (!downloadUrl.value) return
+  const a = document.createElement('a')
+  a.href = downloadUrl.value
+  const ext = downloadExt.value
+  a.download = `bracelet-animation-${Date.now()}.${ext}`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
+const handlePostRender = (sourceCanvas) => {
+  const target = recordingCanvas
+  if (!target || !sourceCanvas) return
+  const ctx = target.getContext('2d')
+  // Draw the current frame from the WebGL canvas to the recording canvas
+  ctx.drawImage(sourceCanvas, 0, 0, target.width, target.height)
+}
 
 const decodeOrRaw = (value) => {
   if (!value) return value
@@ -383,7 +505,8 @@ const runAssemblyStage = () => {
     onFinished: () => {
       loadingText.value = ''
       transitionToViewerStage()
-    }
+    },
+    onPostRender: handlePostRender
   })
   assemblyInitialized.value = true
 }
@@ -424,6 +547,10 @@ const runViewerStage = () => {
     },
     onError: (message) => {
       errorText.value = message || '佩戴展示加载失败'
+    },
+    onPostRender: handlePostRender,
+    onFinished: () => {
+      stopRecording()
     }
   })
   viewerInitialized.value = true
@@ -470,6 +597,7 @@ watch(stage, (value, prev) => {
 
 onMounted(() => {
   prepareSequenceConfig()
+  startRecording() // Start recording immediately
   startStage(stage.value)
 })
 
@@ -495,7 +623,8 @@ const createAssemblyScene = (mountEl, options) => {
     spinTurns,
     onProgress,
     onError,
-    onFinished
+    onFinished,
+    onPostRender
   } = options
   if (!diyModelUrl) return null
   let disposed = false
@@ -877,6 +1006,7 @@ const createAssemblyScene = (mountEl, options) => {
 
     applyCamera(detailProgress)
     renderer.render(scene, camera)
+    if (onPostRender) onPostRender(renderer.domElement)
   }
   animate()
 
@@ -916,7 +1046,7 @@ const createAssemblyScene = (mountEl, options) => {
 }
 
 const createViewerScene = (mountEl, options) => {
-  const { diyUrl, baseModelUrl, backgroundUrl, onProgress, onError } = options
+  const { diyUrl, baseModelUrl, backgroundUrl, onProgress, onError, onPostRender, onFinished } = options
   let disposed = false
   let animationId = 0
   const scene = new THREE.Scene()
@@ -988,7 +1118,13 @@ const createViewerScene = (mountEl, options) => {
         action.setLoop(THREE.LoopOnce, 0)
         action.clampWhenFinished = true
         action.setDuration(1.6)
+        action.setDuration(1.6)
         action.reset().play()
+
+        mixer.addEventListener('finished', () => {
+          console.log('Viewer: animation finished event fired')
+          if (onFinished) onFinished()
+        })
       }
 
       const ropeBone = model.getObjectByName('rope')
@@ -1135,10 +1271,18 @@ const createViewerScene = (mountEl, options) => {
     if (disposed) return
     animationId = requestAnimationFrame(animate)
     const delta = clock.getDelta()
-    if (mixer) mixer.update(delta)
+    if (mixer) {
+      mixer.update(delta)
+      // Check if action finished
+      // Since we use clampWhenFinished = true and LoopOnce, we can check if time >= duration
+      // But simpler is to use the 'finished' event on the mixer
+    }
     renderer.render(scene, camera)
+    if (onPostRender) onPostRender(renderer.domElement)
   }
   animate()
+
+
 
   const handleResize = () => {
     if (disposed) return
@@ -1216,5 +1360,33 @@ const createViewerScene = (mountEl, options) => {
   top: auto;
   bottom: 12px;
   background: rgba(217, 83, 79, 0.8);
+}
+.recording-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+.download-btn {
+  position: absolute;
+  bottom: 30px;
+  right: 20px;
+  padding: 10px 20px;
+  background: #fff;
+  color: #000;
+  border-radius: 24px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 100;
+  cursor: pointer;
+}
+.download-btn:active {
+  transform: scale(0.95);
+  opacity: 0.9;
 }
 </style>
