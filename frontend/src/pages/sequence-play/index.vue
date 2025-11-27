@@ -52,7 +52,10 @@ const stageLabel = computed(() =>
   stage.value === 'assembly' ? '组装展示中...' : '佩戴展示中...'
 )
 
-const cachedDiyObjectUrlRef = ref(null)
+const cachedDiyPayloadRef = ref(null)
+const cachedObjectUrls = new Set()
+let activeAssemblyObjectUrl = ''
+let activeViewerObjectUrl = ''
 
 const sequenceConfig = ref({
   assemblyDiy: '',
@@ -66,7 +69,9 @@ const sequenceConfig = ref({
   camYaw: DEFAULT_CAM_YAW,
   camPitch: DEFAULT_CAM_PITCH,
   spinSpeed: DEFAULT_SPIN_SPEED,
-  spinTurns: DEFAULT_SPIN_TURNS
+  spinTurns: DEFAULT_SPIN_TURNS,
+  useCachedAssembly: false,
+  useCachedViewer: false
 })
 
 const assemblyInitialized = ref(false)
@@ -92,24 +97,24 @@ const resolveMountElement = (refObj) => {
   return null
 }
 
-const restoreCachedDiyUrl = () => {
-  if (typeof window === 'undefined') return ''
+const restoreCachedDiyPayload = () => {
+  if (typeof window === 'undefined') return false
   const raw = window.localStorage?.getItem(DIY_CACHE_KEY)
-  if (!raw) return ''
+  if (!raw) return false
   try {
     const payload = JSON.parse(raw)
     if (payload?.dataUrl) {
-      const blob = dataUrlToBlob(payload.dataUrl, payload.type || 'model/gltf-binary')
-      if (blob.size > 0) {
-        const objectUrl = URL.createObjectURL(blob)
-        cachedDiyObjectUrlRef.value = objectUrl
-        return objectUrl
+      cachedDiyPayloadRef.value = {
+        dataUrl: payload.dataUrl,
+        type: payload.type || 'model/gltf-binary'
       }
+      return true
     }
   } catch (error) {
     console.warn('restore diy cache failed', error)
   }
-  return ''
+  cachedDiyPayloadRef.value = null
+  return false
 }
 
 const dataUrlToBlob = (dataUrl, fallbackType = 'application/octet-stream') => {
@@ -128,6 +133,31 @@ const dataUrlToBlob = (dataUrl, fallbackType = 'application/octet-stream') => {
   } catch (error) {
     console.warn('Failed to decode cached diy model', error)
     return new Blob([], { type: fallbackType })
+  }
+}
+
+const createObjectUrlFromCachedPayload = () => {
+  if (!cachedDiyPayloadRef.value) return ''
+  try {
+    const blob = dataUrlToBlob(
+      cachedDiyPayloadRef.value.dataUrl,
+      cachedDiyPayloadRef.value.type || 'model/gltf-binary'
+    )
+    if (blob.size <= 0) return ''
+    const objectUrl = URL.createObjectURL(blob)
+    cachedObjectUrls.add(objectUrl)
+    return objectUrl
+  } catch (error) {
+    console.warn('create cached diy url failed', error)
+    return ''
+  }
+}
+
+const revokeCachedObjectUrl = (url) => {
+  if (!url) return
+  if (cachedObjectUrls.has(url)) {
+    URL.revokeObjectURL(url)
+    cachedObjectUrls.delete(url)
   }
 }
 
@@ -153,7 +183,7 @@ const prepareSequenceConfig = () => {
   const viewerBg =
     decodeOrRaw(params.get('viewerBg')) || decodeOrRaw(params.get('bg')) || DEFAULT_BG
 
-  const cachedUrl = restoreCachedDiyUrl()
+  const hasCachedPayload = restoreCachedDiyPayload()
 
   const braceletScale = parseNumber(params.get('scale'), DEFAULT_BRACELET_SCALE)
   const offsetX = parseNumber(params.get('offsetX'), DEFAULT_BRACELET_OFFSET.x)
@@ -165,9 +195,14 @@ const prepareSequenceConfig = () => {
   const spinSpeed = parseNumber(params.get('spinSpeed'), DEFAULT_SPIN_SPEED)
   const spinTurns = parseNumber(params.get('spinTurns'), DEFAULT_SPIN_TURNS)
 
+  const assemblySource = assemblyModel || diy || ''
+  const viewerSource = viewerModel || diy || ''
+  const useCachedAssembly = !assemblySource && hasCachedPayload
+  const useCachedViewer = !viewerSource && hasCachedPayload
+
   sequenceConfig.value = {
-    assemblyDiy: cachedUrl || assemblyModel || diy || '',
-    viewerDiy: cachedUrl || viewerModel || diy || '',
+    assemblyDiy: assemblySource,
+    viewerDiy: viewerSource,
     viewerBase: viewerBase || DEFAULT_BASE_MODEL,
     assemblyBg,
     viewerBg,
@@ -177,10 +212,12 @@ const prepareSequenceConfig = () => {
     camYaw,
     camPitch,
     spinSpeed,
-    spinTurns
+    spinTurns,
+    useCachedAssembly,
+    useCachedViewer
   }
 
-  if (!sequenceConfig.value.assemblyDiy) {
+  if (!sequenceConfig.value.assemblyDiy && !useCachedAssembly) {
     stage.value = 'viewer'
   }
 }
@@ -193,7 +230,19 @@ const runAssemblyStage = () => {
     return
   }
   const config = sequenceConfig.value
-  if (!config.assemblyDiy) {
+  let assemblyUrl = config.assemblyDiy
+  if (config.useCachedAssembly || (!assemblyUrl && cachedDiyPayloadRef.value)) {
+    if (!cachedDiyPayloadRef.value) {
+      restoreCachedDiyPayload()
+    }
+    if (cachedDiyPayloadRef.value) {
+      assemblyUrl = createObjectUrlFromCachedPayload()
+      activeAssemblyObjectUrl = assemblyUrl
+    }
+  } else {
+    activeAssemblyObjectUrl = ''
+  }
+  if (!assemblyUrl) {
     stage.value = 'viewer'
     return
   }
@@ -205,7 +254,7 @@ const runAssemblyStage = () => {
     config.braceletOffset.z
   )
   assemblyCleanup = createAssemblyScene(mountEl, {
-    diyModelUrl: config.assemblyDiy,
+    diyModelUrl: assemblyUrl,
     backgroundUrl: config.assemblyBg,
     braceletScale: config.braceletScale,
     braceletOffset: offsetVec,
@@ -238,14 +287,26 @@ const runViewerStage = () => {
     return
   }
   const config = sequenceConfig.value
-  if (!config.viewerDiy) {
+  let viewerUrl = config.viewerDiy
+  if (config.useCachedViewer || (!viewerUrl && cachedDiyPayloadRef.value)) {
+    if (!cachedDiyPayloadRef.value) {
+      restoreCachedDiyPayload()
+    }
+    if (cachedDiyPayloadRef.value) {
+      viewerUrl = createObjectUrlFromCachedPayload()
+      activeViewerObjectUrl = viewerUrl
+    }
+  } else {
+    activeViewerObjectUrl = ''
+  }
+  if (!viewerUrl) {
     errorText.value = '未找到 DIY 模型'
     return
   }
   loadingText.value = '佩戴展示加载中...'
   errorText.value = ''
   viewerCleanup = createViewerScene(mountEl, {
-    diyUrl: config.viewerDiy,
+    diyUrl: viewerUrl,
     baseModelUrl: config.viewerBase || DEFAULT_BASE_MODEL,
     backgroundUrl: config.viewerBg || DEFAULT_BG,
     onProgress: (progress) => {
@@ -264,6 +325,10 @@ const stopAssemblyStage = () => {
     assemblyCleanup()
     assemblyCleanup = null
   }
+  if (activeAssemblyObjectUrl) {
+    revokeCachedObjectUrl(activeAssemblyObjectUrl)
+    activeAssemblyObjectUrl = ''
+  }
   assemblyInitialized.value = false
 }
 
@@ -271,6 +336,10 @@ const stopViewerStage = () => {
   if (viewerCleanup) {
     viewerCleanup()
     viewerCleanup = null
+  }
+  if (activeViewerObjectUrl) {
+    revokeCachedObjectUrl(activeViewerObjectUrl)
+    activeViewerObjectUrl = ''
   }
   viewerInitialized.value = false
 }
@@ -306,9 +375,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopAssemblyStage()
   stopViewerStage()
-  if (cachedDiyObjectUrlRef.value) {
-    URL.revokeObjectURL(cachedDiyObjectUrlRef.value)
-  }
+  cachedObjectUrls.forEach((url) => {
+    URL.revokeObjectURL(url)
+  })
+  cachedObjectUrls.clear()
 })
 
 const createAssemblyScene = (mountEl, options) => {
