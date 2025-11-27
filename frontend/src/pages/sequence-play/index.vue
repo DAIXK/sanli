@@ -594,7 +594,6 @@ const createAssemblyScene = (mountEl, options) => {
       const targetPos = obj.getWorldPosition(new THREE.Vector3())
       const targetQuat = obj.getWorldQuaternion(new THREE.Quaternion())
       const targetScale = obj.getWorldScale(new THREE.Vector3())
-      center.add(targetPos)
       if (extras.bounds?.diameter) {
         diameterSum += extras.bounds.diameter
         diameterCount += 1
@@ -607,7 +606,10 @@ const createAssemblyScene = (mountEl, options) => {
       return
     }
 
-    center.divideScalar(sources.length)
+    // Use the root object's position as the center of the ring
+    // This ensures that even if beads don't form a full circle (e.g. partial assembly),
+    // the center is still correct relative to the bracelet origin.
+    root.getWorldPosition(center)
 
     const normal = new THREE.Vector3()
     for (let i = 0; i < sources.length; i += 1) {
