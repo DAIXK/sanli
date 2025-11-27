@@ -29,7 +29,6 @@ type AnimatedBead = {
   baseScale: THREE.Vector3;
 };
 
-const DEFAULT_DIY_MODEL = '/static/diy.gltf'; // 默认 diy 模型路径
 const DEFAULT_RING_RADIUS = 1.185; // 默认环半径（米，约 6.5cm）
 const DEFAULT_HEIGHT = 0.04; // 默认环中心高度（米）
 const DEFAULT_BRACELET_SCALE = 1.85; // 默认整体缩放
@@ -98,7 +97,7 @@ const BraceletAssemblyPage = ({
     };
 
     const raw = searchParams?.get('diyModel') || searchParams?.get('diy');
-    let url = diyModelUrlProp || DEFAULT_DIY_MODEL;
+    let url = diyModelUrlProp || undefined;
     if (!diyModelUrlProp && raw) {
       try {
         url = decodeURIComponent(raw);
@@ -130,7 +129,10 @@ const BraceletAssemblyPage = ({
   }, [searchParams, diyModelUrlProp]);
 
   useEffect(() => {
-    if (!mountRef.current) return;
+    if (!mountRef.current || !diyModelUrl) {
+      setLoadingError('缺少 DIY 模型数据');
+      return;
+    }
 
     setLoadingError(null);
     setLoadingProgress(0);

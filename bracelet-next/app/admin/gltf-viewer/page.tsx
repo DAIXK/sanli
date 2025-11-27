@@ -8,7 +8,6 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 
 const DIY_MODEL_CACHE_KEY = 'bracelet_diy_model_cache';
 const DEFAULT_HUMAN_MODEL = '/static/models/Human-Arm-Animation.gltf';
-const DEFAULT_DIY_MODEL = '/static/diy.gltf';
 const DEFAULT_BG_IMAGE = '/static/background.png';
 const DEFAULT_PLAYBACK_WINDOW = { startRatio: 0.35, endRatio: 0.44 };
 const DEFAULT_TARGET_DURATION = 1.6; // seconds
@@ -102,7 +101,7 @@ const ModelViewerPage = ({ baseModelUrl, diyModelUrl, backgroundUrl }: ModelView
       diyModelUrl ||
       decodeOrRaw(searchParams?.get('diyModel')) ||
       decodeOrRaw(searchParams?.get('diy')) ||
-      DEFAULT_DIY_MODEL;
+      undefined;
 
     const resolvedBg =
       backgroundUrl ||
@@ -238,13 +237,17 @@ const ModelViewerPage = ({ baseModelUrl, diyModelUrl, backgroundUrl }: ModelView
           const targetQuat = new THREE.Quaternion();
           const targetScale = new THREE.Vector3();
 
-          const diyLoader = new GLTFLoader();
-          diyLoader.load(
-          resolvedDiyModelUrl,
-            (diyGltf) => {
-              if (disposed) return;
-              const diyRoot = new THREE.Group();
-              diyRoot.name = 'DIYBraceletAttachment';
+          if (!resolvedDiyModelUrl) {
+            console.warn('DIY model url missing, skip attaching bracelet');
+            setLoadingError('缺少 DIY 模型数据');
+          } else {
+            const diyLoader = new GLTFLoader();
+            diyLoader.load(
+              resolvedDiyModelUrl,
+              (diyGltf) => {
+                if (disposed) return;
+                const diyRoot = new THREE.Group();
+                diyRoot.name = 'DIYBraceletAttachment';
 
               // Reset diy scene transform before parenting.
               diyGltf.scene.position.set(0, 0, 0);
@@ -372,6 +375,7 @@ const ModelViewerPage = ({ baseModelUrl, diyModelUrl, backgroundUrl }: ModelView
               setLoadingError(`Failed to load DIY model: ${diyModelUrl}.`);
             }
           );
+          }
         } else {
           console.warn('rope bone not found; DIY bracelet not attached');
         }

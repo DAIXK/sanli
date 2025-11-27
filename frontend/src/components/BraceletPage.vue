@@ -567,7 +567,9 @@ const canExportModel = computed(
   () => sceneReady.value && marbleCount.value > 0 && !!ringRoot
 )
 const DIY_MODEL_CACHE_KEY = 'bracelet_diy_model_cache'
-const DEFAULT_SEQUENCE_PLAY_URL = '/sequence-play'
+// Use the actual UniApp route for the sequence player page
+const SEQUENCE_PLAY_INTERNAL_PAGE = '/pages/sequence-play/index'
+const DEFAULT_SEQUENCE_PLAY_URL = '/internal'
 const deleteZone = reactive({
   visible: false,
   hovered: false
@@ -1041,42 +1043,79 @@ const buildExportFileName = () => {
   return `${baseName}-diy-${Date.now()}.glb`
 }
 
-const resolveSequencePlayUrl = () => {
-  if (!isH5 || typeof window === 'undefined') return ''
+const resolveSequencePlayTarget = () => {
+  if (!isH5 || typeof window === 'undefined') return { path: '', url: '' }
   const envUrl = import.meta?.env?.VITE_SEQUENCE_PLAY_URL
-  const base =
-    (typeof envUrl === 'string' && envUrl.trim()) || DEFAULT_SEQUENCE_PLAY_URL
-  if (/^https?:\/\//i.test(base)) return base
+  const trimmed = typeof envUrl === 'string' ? envUrl.trim() : ''
+  const candidate = trimmed || DEFAULT_SEQUENCE_PLAY_URL
+
+  if (/^https?:\/\//i.test(candidate)) {
+    return { path: '', url: candidate }
+  }
+
+  const normalized = candidate.startsWith('/') ? candidate : `/${candidate}`
+
+  if (normalized === '/internal' || normalized === '/internal-sequence-play') {
+    return { path: SEQUENCE_PLAY_INTERNAL_PAGE, url: '' }
+  }
+
+  if (normalized.startsWith('/pages/')) {
+    return { path: normalized, url: '' }
+  }
+
   try {
-    return new URL(base, window.location.origin).toString()
+    return {
+      path: '',
+      url: new URL(normalized, window.location.origin).toString()
+    }
   } catch (error) {
-    console.warn('构建 sequence-play 地址失败', error)
-    return base
+    console.warn('构建 sequence-play URL 失败', error)
+    return { path: '', url: normalized }
   }
 }
 
-const openSequencePlayPage = () => {
-  const target = resolveSequencePlayUrl()
-  if (!target) {
+const openSequencePlayPage = async () => {
+  const { path, url } = resolveSequencePlayTarget()
+  if (!path && !url) {
     console.warn('sequence-play 地址为空，无法跳转')
     return false
   }
-  try {
-    console.info('[bracelet] go sequence-play =>', target)
-    window.location.href = target
-    // 某些内嵌环境会拦截 assign/href，尝试备用方式
-    setTimeout(() => {
+
+  if (path) {
+    const tryUniRedirect = async () => {
+      if (typeof uni === 'undefined' || typeof uni.redirectTo !== 'function') return false
       try {
-        window.location.assign(target)
+        await uni.redirectTo({ url: path })
+        return true
       } catch (error) {
-        console.warn('备用跳转失败', error)
+        console.warn('uni.redirectTo 跳转 sequence-play 失败', error)
+        return false
       }
-    }, 0)
-    return true // 让调用方认为已触发跳转
-  } catch (error) {
-    console.warn('跳转 sequence-play 失败', error)
-    return false
+    }
+    const tryUniNavigate = async () => {
+      if (typeof uni === 'undefined' || typeof uni.navigateTo !== 'function') return false
+      try {
+        await uni.navigateTo({ url: path })
+        return true
+      } catch (error) {
+        console.warn('uni.navigateTo 跳转 sequence-play 失败', error)
+        return false
+      }
+    }
+    if ((await tryUniRedirect()) || (await tryUniNavigate())) {
+      return true
+    }
   }
+
+  if (url) {
+    try {
+      window.location.replace(url)
+      return true
+    } catch (error) {
+      console.warn('window 跳转 sequence-play 失败', error)
+    }
+  }
+  return false
 }
 
 const navigateToSequencePlay = () => openSequencePlayPage()

@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import BraceletAssemblyPage from '../bracelet-assembly/page';
 import ModelViewerPage from '../gltf-viewer/page';
 
+const DEFAULT_BG_IMAGE = '/static/background.png';
 const DIY_MODEL_CACHE_KEY = 'bracelet_diy_model_cache';
 
 const dataUrlToBlob = (dataUrl: string, fallbackType = 'application/octet-stream') => {
@@ -74,8 +75,12 @@ const SequencePlayPage = () => {
     const diy = decodeOrRaw(searchParams?.get('diyModel')) || decodeOrRaw(searchParams?.get('diy'));
     const assemblyDiy = decodeOrRaw(searchParams?.get('assemblyModel')) || diy;
     const viewerBase = decodeOrRaw(searchParams?.get('viewerModel')) || undefined;
-    const assemblyBg = decodeOrRaw(searchParams?.get('assemblyBg')) || decodeOrRaw(searchParams?.get('bg'));
-    const viewerBg = decodeOrRaw(searchParams?.get('viewerBg')) || decodeOrRaw(searchParams?.get('bg'));
+    const assemblyBg =
+      decodeOrRaw(searchParams?.get('assemblyBg')) ||
+      decodeOrRaw(searchParams?.get('bg')) ||
+      DEFAULT_BG_IMAGE;
+    const viewerBg =
+      decodeOrRaw(searchParams?.get('viewerBg')) || decodeOrRaw(searchParams?.get('bg')) || DEFAULT_BG_IMAGE;
 
     return {
       assemblyDiy: assemblyDiy || undefined,
@@ -89,6 +94,7 @@ const SequencePlayPage = () => {
   const assemblyDiyUrl = cachedDiyUrl || config.assemblyDiy;
   const viewerDiyUrl = cachedDiyUrl || config.diy;
   const label = stage === 'assembly' ? '组装展示中...' : '佩戴展示中...';
+  const backdropUrl = stage === 'assembly' ? config.assemblyBg : config.viewerBg;
 
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
@@ -113,6 +119,9 @@ const SequencePlayPage = () => {
         touchAction: 'none',
         overscrollBehavior: 'none',
         background: '#000',
+        backgroundImage: backdropUrl ? `url(${backdropUrl})` : undefined,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
         inset: 0,
       }}
     >

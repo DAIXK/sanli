@@ -6,6 +6,13 @@
         "navigationStyle": "custom",
         "navigationBarTitleText": "7*8手串"
       }
+    },
+    {
+      "path": "pages/sequence-play/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "Sequence Play"
+      }
     }
   ],
   "globalStyle": {
