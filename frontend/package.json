@@ -13,7 +13,8 @@
     "@dcloudio/uni-app": "npm:@dcloudio/uni-app@vue3",
     "@dcloudio/uni-h5": "npm:@dcloudio/uni-h5@vue3",
     "@dcloudio/uni-mp-weixin": "npm:@dcloudio/uni-mp-weixin@vue3",
-    "three": "^0.162.0"
+    "three": "^0.162.0",
+    "weixin-js-sdk": "^1.6.5"
   },
   "devDependencies": {
     "@dcloudio/types": "3.4.19",

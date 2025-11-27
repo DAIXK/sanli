@@ -24,6 +24,15 @@
     >
       下载视频
     </view>
+    
+    <!-- Preview Button -->
+    <view 
+      class="preview-btn" 
+      v-if="showDownloadBtn"
+      @tap="navigateToPreview"
+    >
+      预览视频
+    </view>
   </view>
 </template>
 
@@ -33,11 +42,16 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 
+import { saveModelToDB, loadModelFromDB } from '../../utils/db.js'
+
 const DIY_CACHE_KEY = 'bracelet_diy_model_cache'
+const VIDEO_CACHE_KEY = 'bracelet_generated_video_cache'
 const DEFAULT_BASE_MODEL = '/static/models/Human-Arm-Animation.gltf'
 const DEFAULT_BG = '/static/img/background.png'
 const VIDEO_FILE_REGEX = /\.(mp4|webm|ogg|m4v)$/i
 const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000 // 7 days
+
+
 
 // Assembly defaults
 const DEFAULT_RING_RADIUS = 1.185
@@ -192,7 +206,7 @@ const startRecording = () => {
       }
     }
     
-    recorder.onstop = () => {
+    recorder.onstop = async () => {
       console.log('Recorder: stopped. Total chunks:', recordedChunks.value.length)
       const blob = new Blob(recordedChunks.value, { type: selectedMimeType })
       console.log('Recorder: blob created, size:', blob.size)
@@ -201,6 +215,18 @@ const startRecording = () => {
       downloadExt.value = selectedMimeType.includes('mp4') ? 'mp4' : 'webm'
       showDownloadBtn.value = true
       console.log('Recorder: download button should show')
+
+      // Cache video to IndexedDB
+      try {
+        await saveModelToDB(VIDEO_CACHE_KEY, {
+          blob,
+          type: selectedMimeType,
+          savedAt: Date.now()
+        })
+        console.log('Recorder: video cached to IndexedDB')
+      } catch (error) {
+        console.warn('Recorder: failed to cache video', error)
+      }
     }
     
     recorder.start()
@@ -231,6 +257,12 @@ const downloadVideo = () => {
   document.body.removeChild(a)
 }
 
+const navigateToPreview = () => {
+  uni.navigateTo({
+    url: '/pages/video-result/index'
+  })
+}
+
 const handlePostRender = (sourceCanvas) => {
   const target = recordingCanvas
   if (!target || !sourceCanvas) return
@@ -256,8 +288,6 @@ const resolveMountElement = (refObj) => {
   if (target.$el?.$el instanceof HTMLElement) return target.$el.$el
   return null
 }
-
-import { loadModelFromDB } from '../../utils/db.js'
 
 const restoreCachedDiyPayload = async () => {
   if (typeof window === 'undefined') return
@@ -1407,5 +1437,25 @@ const createViewerScene = (mountEl, options) => {
 .download-btn:active {
   transform: scale(0.95);
   opacity: 0.9;
+}
+.preview-btn {
+  position: absolute;
+  bottom: 30px;
+  right: 140px; /* Positioned to the left of download button */
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 24px;
+  font-size: 14px;
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  cursor: pointer;
+}
+.preview-btn:active {
+  transform: scale(0.95);
+  opacity: 0.9;
+  background: rgba(255, 255, 255, 0.3);
 }
 </style>

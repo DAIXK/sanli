@@ -13,6 +13,13 @@
         "navigationStyle": "custom",
         "navigationBarTitleText": "Sequence Play"
       }
+    },
+    {
+      "path": "pages/video-result/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "Video Result"
+      }
     }
   ],
   "globalStyle": {
