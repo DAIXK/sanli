@@ -37,6 +37,7 @@ const DIY_CACHE_KEY = 'bracelet_diy_model_cache'
 const DEFAULT_BASE_MODEL = '/static/models/Human-Arm-Animation.gltf'
 const DEFAULT_BG = '/static/img/background.png'
 const VIDEO_FILE_REGEX = /\.(mp4|webm|ogg|m4v)$/i
+const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000 // 7 days
 
 // Assembly defaults
 const DEFAULT_RING_RADIUS = 1.185
@@ -256,24 +257,42 @@ const resolveMountElement = (refObj) => {
   return null
 }
 
-const restoreCachedDiyPayload = () => {
-  if (typeof window === 'undefined') return false
-  const raw = window.localStorage?.getItem(DIY_CACHE_KEY)
-  if (!raw) return false
+import { loadModelFromDB } from '../../utils/db.js'
+
+const restoreCachedDiyPayload = async () => {
+  if (typeof window === 'undefined') return
   try {
-    const payload = JSON.parse(raw)
-    if (payload?.dataUrl) {
-      cachedDiyPayloadRef.value = {
-        dataUrl: payload.dataUrl,
-        type: payload.type || 'model/gltf-binary'
+    // Try IndexedDB first
+    let raw = await loadModelFromDB(DIY_CACHE_KEY)
+    
+    // Fallback to localStorage if not found (for backward compatibility)
+    if (!raw) {
+      const localData = window.localStorage?.getItem(DIY_CACHE_KEY)
+      if (localData) {
+        raw = JSON.parse(localData)
       }
-      return true
+    }
+
+    if (!raw) {
+      cachedDiyPayloadRef.value = null
+      return
+    }
+    
+    // If raw is already an object (from IndexedDB), use it directly
+    // If it's from localStorage, it might need parsing (but we parsed it above)
+    const payload = raw
+    
+    if (payload && payload.savedAt && Date.now() - payload.savedAt < CACHE_MAX_AGE) {
+      cachedDiyPayloadRef.value = payload
+    } else {
+      // Clear expired cache
+      window.localStorage?.removeItem(DIY_CACHE_KEY)
+      cachedDiyPayloadRef.value = null
     }
   } catch (error) {
-    console.warn('restore diy cache failed', error)
+    console.warn('restore cached diy payload failed', error)
+    cachedDiyPayloadRef.value = null
   }
-  cachedDiyPayloadRef.value = null
-  return false
 }
 
 const dataUrlToBlob = (dataUrl, fallbackType = 'application/octet-stream') => {
@@ -453,7 +472,7 @@ const prepareSequenceConfig = () => {
   }
 }
 
-const runAssemblyStage = () => {
+const runAssemblyStage = async () => {
   if (assemblyInitialized.value) return
   const mountEl = resolveMountElement(assemblyMountRef)
   if (!mountEl) {
@@ -464,7 +483,7 @@ const runAssemblyStage = () => {
   let assemblyUrl = config.assemblyDiy
   if (config.useCachedAssembly || (!assemblyUrl && cachedDiyPayloadRef.value)) {
     if (!cachedDiyPayloadRef.value) {
-      restoreCachedDiyPayload()
+      await restoreCachedDiyPayload()
     }
     if (cachedDiyPayloadRef.value) {
       assemblyUrl = createObjectUrlFromCachedPayload()
@@ -511,7 +530,7 @@ const runAssemblyStage = () => {
   assemblyInitialized.value = true
 }
 
-const runViewerStage = () => {
+const runViewerStage = async () => {
   if (viewerInitialized.value) return
   const mountEl = resolveMountElement(viewerMountRef)
   if (!mountEl) {
@@ -522,7 +541,7 @@ const runViewerStage = () => {
   let viewerUrl = config.viewerDiy
   if (config.useCachedViewer || (!viewerUrl && cachedDiyPayloadRef.value)) {
     if (!cachedDiyPayloadRef.value) {
-      restoreCachedDiyPayload()
+      await restoreCachedDiyPayload()
     }
     if (cachedDiyPayloadRef.value) {
       viewerUrl = createObjectUrlFromCachedPayload()

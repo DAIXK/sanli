@@ -1128,6 +1128,8 @@ const blobToDataUrl = (blob) =>
     reader.readAsDataURL(blob)
   })
 
+import { saveModelToDB } from '../utils/db.js'
+
 const cacheBraceletModel = async (blob, filename) => {
   if (!isH5 || typeof window === 'undefined' || !blob) return false
   try {
@@ -1138,7 +1140,11 @@ const cacheBraceletModel = async (blob, filename) => {
       dataUrl,
       savedAt: Date.now()
     }
-    window.localStorage?.setItem(DIY_MODEL_CACHE_KEY, JSON.stringify(payload))
+    // Use IndexedDB instead of localStorage to avoid quota limits
+    const saved = await saveModelToDB(DIY_MODEL_CACHE_KEY, payload)
+    if (!saved) {
+      throw new Error('IndexedDB save failed')
+    }
     return true
   } catch (error) {
     console.warn('缓存模型失败', error)
