@@ -1100,9 +1100,12 @@ const createViewerScene = (mountEl, options) => {
               beadClone.quaternion.copy(targetQuat)
               beadClone.scale.copy(targetScale)
               beadClone.visible = true
+              // Disable frustum culling to prevent beads from disappearing when attached to bone
+              beadClone.frustumCulled = false
               beadGroup.add(beadClone)
               obj.visible = false
             })
+
           },
           undefined,
           (error) => {
