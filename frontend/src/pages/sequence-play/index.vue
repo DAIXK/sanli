@@ -612,15 +612,23 @@ const createAssemblyScene = (mountEl, options) => {
     root.getWorldPosition(center)
 
     const normal = new THREE.Vector3()
-    for (let i = 0; i < sources.length; i += 1) {
-      const a = sources[i].targetPos.clone().sub(center)
-      const b = sources[(i + 1) % sources.length].targetPos.clone().sub(center)
-      normal.add(a.cross(b))
+    if (sources.length >= 3) {
+      // Use 3 points to calculate the plane normal
+      // This is more robust for partial rings or unsorted beads than the polygon method
+      const p0 = sources[0].targetPos
+      const p1 = sources[Math.floor(sources.length / 3)].targetPos
+      const p2 = sources[Math.floor((sources.length * 2) / 3)].targetPos
+      const v1 = p1.clone().sub(p0)
+      const v2 = p2.clone().sub(p0)
+      normal.crossVectors(v1, v2).normalize()
     }
+    
+    // Fallback or check validity
     if (normal.lengthSq() < 1e-6) {
       normal.set(0, 1, 0)
-    } else {
-      normal.normalize()
+    } else if (normal.y < 0) {
+       // Prefer upward facing normal for consistency
+       normal.negate()
     }
 
     const worldUp = new THREE.Vector3(0, 1, 0)
