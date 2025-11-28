@@ -33,6 +33,107 @@
     >
       预览视频
     </view>
+
+    <!-- Left Debug Panel (Model & Camera) -->
+    <view class="debug-panel" v-if="stage === 'viewer' && debugParams.showPanel">
+      <view class="debug-item">
+        <text>Scale:</text>
+        <input type="number" v-model.number="debugParams.scale" step="0.1" />
+      </view>
+      <view class="debug-item">
+        <text>Rot X:</text>
+        <input type="number" v-model.number="debugParams.rotX" step="0.1" />
+      </view>
+      <view class="debug-item">
+        <text>Rot Y:</text>
+        <input type="number" v-model.number="debugParams.rotY" step="0.1" />
+      </view>
+      <view class="debug-item">
+        <text>Rot Z:</text>
+        <input type="number" v-model.number="debugParams.rotZ" step="0.1" />
+      </view>
+      <view class="debug-item">
+        <text>Pos X:</text>
+        <input type="number" v-model.number="debugParams.posX" step="0.1" />
+      </view>
+      <view class="debug-item">
+        <text>Pos Y:</text>
+        <input type="number" v-model.number="debugParams.posY" step="0.1" />
+      </view>
+      <view class="debug-item">
+        <text>Pos Z:</text>
+        <input type="number" v-model.number="debugParams.posZ" step="0.1" />
+      </view>
+      <view class="debug-item">
+        <text>Cam Z:</text>
+        <input type="number" v-model.number="debugParams.cameraZoom" step="0.1" />
+      </view>
+      <view class="debug-item">
+        <text>Anim Start:</text>
+        <input type="number" v-model.number="debugParams.animStart" step="0.1" />
+      </view>
+      <view class="debug-item">
+        <text>Anim End:</text>
+        <input type="number" v-model.number="debugParams.animEnd" step="0.1" />
+      </view>
+      <view class="debug-item">
+        <text>Speed:</text>
+        <input type="number" v-model.number="debugParams.animSpeed" step="0.1" />
+      </view>
+      <view class="debug-item">
+        <text>Amb Int:</text>
+        <input type="number" v-model.number="debugParams.ambientIntensity" step="0.1" />
+      </view>
+      <view class="debug-item">
+        <text>Dir Int:</text>
+        <input type="number" v-model.number="debugParams.dirIntensity" step="0.1" />
+      </view>
+      <view class="debug-item">
+        <text>Dir X:</text>
+        <input type="number" v-model.number="debugParams.dirX" step="1" />
+      </view>
+      <view class="debug-item">
+        <text>Dir Y:</text>
+        <input type="number" v-model.number="debugParams.dirY" step="1" />
+      </view>
+      <view class="debug-item">
+        <text>Dir Z:</text>
+        <input type="number" v-model.number="debugParams.dirZ" step="1" />
+      </view>
+      <button class="debug-btn" @click="replayAnimation">Replay</button>
+    </view>
+
+    <!-- Right Debug Panel (Bracelet) -->
+    <view class="debug-panel debug-panel-right" v-if="stage === 'viewer' && debugParams.showPanel">
+      <view class="debug-item">
+        <text>B.Scale:</text>
+        <input type="number" v-model.number="braceletDebugParams.scale" step="0.1" />
+      </view>
+      <view class="debug-item">
+        <text>B.Rot X:</text>
+        <input type="number" v-model.number="braceletDebugParams.rotX" step="0.1" />
+      </view>
+      <view class="debug-item">
+        <text>B.Rot Y:</text>
+        <input type="number" v-model.number="braceletDebugParams.rotY" step="0.1" />
+      </view>
+      <view class="debug-item">
+        <text>B.Rot Z:</text>
+        <input type="number" v-model.number="braceletDebugParams.rotZ" step="0.1" />
+      </view>
+      <view class="debug-item">
+        <text>B.Pos X:</text>
+        <input type="number" v-model.number="braceletDebugParams.posX" step="0.01" />
+      </view>
+      <view class="debug-item">
+        <text>B.Pos Y:</text>
+        <input type="number" v-model.number="braceletDebugParams.posY" step="0.01" />
+      </view>
+      <view class="debug-item">
+        <text>B.Pos Z:</text>
+        <input type="number" v-model.number="braceletDebugParams.posZ" step="0.01" />
+      </view>
+    </view>
   </view>
 </template>
 
@@ -40,13 +141,53 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 
 import { saveModelToDB, loadModelFromDB } from '../../utils/db.js'
 
 const DIY_CACHE_KEY = 'bracelet_diy_model_cache'
 const VIDEO_CACHE_KEY = 'bracelet_generated_video_cache'
-const DEFAULT_BASE_MODEL = '/static/models/Human-Arm-Animation.gltf'
+// const DEFAULT_BASE_MODEL = '/static/models/Human-Arm-Animation.gltf'
+const DEFAULT_BASE_MODEL = '/static/models/human2.gltf'
+
+const debugParams = ref({
+  scale: 142.4,
+  rotX: 1.8,
+  rotY: 2.4,
+  rotZ: 1,
+  posX: 3.6,
+  posY: -5.8,
+  posZ: -1.4,
+  cameraZoom: 1,
+  animStart: 1.8,
+  animEnd: 2,
+  animSpeed: 0.1,
+  ambientIntensity: 6.9,
+  dirIntensity: 1.9,
+  dirX: 3,
+  dirY: 3,
+  dirX: 3,
+  dirY: 3,
+  dirZ: 3,
+  showPanel: false
+})
+
+const replayTrigger = ref(0)
+const replayAnimation = () => {
+  replayTrigger.value++
+}
+
+const braceletDebugParams = ref({
+  scale: 1.2,
+  rotX: -0.1,
+  rotY: -1,
+  rotZ: 0,
+  posX: -0.29,
+  posY: 0,
+  posZ: 0
+})
+
 const DEFAULT_BG = '/static/img/background.png'
 const VIDEO_FILE_REGEX = /\.(mp4|webm|ogg|m4v)$/i
 const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000 // 7 days
@@ -1123,12 +1264,12 @@ const createViewerScene = (mountEl, options) => {
   const envMap = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture
   scene.environment = envMap
 
-  const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 2)
+  const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, debugParams.value.ambientIntensity)
   hemisphereLight.position.set(0, 20, 0)
   scene.add(hemisphereLight)
 
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 2)
-  directionalLight.position.set(10, 10, 10)
+  const directionalLight = new THREE.DirectionalLight(0xffffff, debugParams.value.dirIntensity)
+  directionalLight.position.set(debugParams.value.dirX, debugParams.value.dirY, debugParams.value.dirZ)
   scene.add(directionalLight)
 
   const directionalLight2 = new THREE.DirectionalLight(0xffffff, 1)
@@ -1144,46 +1285,144 @@ const createViewerScene = (mountEl, options) => {
     (gltf) => {
       if (disposed) return
       const model = gltf.scene
-      model.position.set(3.4, 1.4, 0)
-      model.rotation.set(1, 1, 1)
-      model.scale.set(4.5, 4.5, 4.5)
+      // Use debug params
+      model.scale.set(debugParams.value.scale, debugParams.value.scale, debugParams.value.scale)
+      model.rotation.set(debugParams.value.rotX, debugParams.value.rotY, debugParams.value.rotZ)
+      model.position.set(debugParams.value.posX, debugParams.value.posY, debugParams.value.posZ)
       scene.add(model)
+
+      // Remove the wall/plane BEFORE calculating bounding box
+      const wall = model.getObjectByName('平面')
+      if (wall) {
+        wall.removeFromParent()
+      }
+
+      // Calculate bounding box for camera positioning (but do NOT move model)
+      const box = new THREE.Box3().setFromObject(model)
+      const size = box.getSize(new THREE.Vector3())
+
+      // Adjust camera to fit the model
+      const maxDim = Math.max(size.x, size.y, size.z)
+      const fov = camera.fov * (Math.PI / 180)
+      let baseCameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2))
+      
+      // Initial camera set
+      camera.position.set(0, 0, baseCameraZ * debugParams.value.cameraZoom)
+      camera.lookAt(0, 0, 0)
+      
+      if (controls) {
+        controls.target.set(0, 0, 0)
+        controls.update()
+      }
+
+      // Watch debug params
+      watch(debugParams, (newVal) => {
+        if (model) {
+          model.scale.set(newVal.scale, newVal.scale, newVal.scale)
+          model.rotation.set(newVal.rotX, newVal.rotY, newVal.rotZ)
+          model.position.set(newVal.posX, newVal.posY, newVal.posZ)
+        }
+        if (camera) {
+             camera.position.set(0, 0, baseCameraZ * newVal.cameraZoom)
+             camera.lookAt(0, 0, 0)
+        }
+      }, { deep: true })
+
+      // Adjust materials to be matte (remove reflection)
+      model.traverse((child) => {
+        if (child.isMesh && child.material) {
+          child.material.roughness = 1.0
+          child.material.metalness = 0.0
+          child.material.envMapIntensity = 0.0 // Disable environment map reflection
+          
+          if (child.material.specularIntensity !== undefined) {
+            child.material.specularIntensity = 0.0
+          }
+          if (child.material.clearcoat !== undefined) {
+            child.material.clearcoat = 0.0
+          }
+          if (child.material.transmission !== undefined) {
+            child.material.transmission = 0.0
+          }
+
+          if (child.material.map) {
+            child.material.map.encoding = THREE.sRGBEncoding
+          }
+          child.material.needsUpdate = true
+        }
+      })
 
       if (gltf.animations && gltf.animations.length) {
         mixer = new THREE.AnimationMixer(model)
-        const sourceClip = gltf.animations[0]
-        const fullDur = sourceClip.duration
-        const windowStart = Math.max(0, fullDur * 0.35)
-        const windowEnd = Math.max(windowStart + 0.0001, fullDur * 0.44)
-        const fps = 30
-        const windowClip = THREE.AnimationUtils.subclip(
-          sourceClip,
-          'windowClip',
-          windowStart * fps,
-          windowEnd * fps,
-          fps
-        )
-        const action = mixer.clipAction(windowClip)
-        action.setLoop(THREE.LoopOnce, 0)
+        mixer.timeScale = debugParams.value.animSpeed // Apply initial speed
+        const action = mixer.clipAction(gltf.animations[0])
         action.clampWhenFinished = true
-        action.setDuration(1.6)
-        action.setDuration(1.6)
-        action.reset().play()
-
+        action.loop = THREE.LoopOnce
+        action.play()
+        console.log('Animation loaded. Duration:', gltf.animations[0].duration)
+        
+        // Listen for animation finish
         mixer.addEventListener('finished', () => {
-          console.log('Viewer: animation finished event fired')
-          if (onFinished) onFinished()
+             console.log('Animation finished')
+             if (onFinished) onFinished()
         })
       }
 
-      const ropeBone = model.getObjectByName('rope')
-      const ropeMesh = model.getObjectByName('RopeMesh')
+      // Watch for animation timing changes
+      watch(() => [debugParams.value.animStart, debugParams.value.animEnd], ([start, end]) => {
+         if (mixer) {
+           const action = mixer.existingAction(mixer._actions[0]._clip)
+           if (action) {
+             action.time = start
+             action.play()
+           }
+         }
+      })
+      
+      // Watch for speed changes
+      watch(() => debugParams.value.animSpeed, (speed) => {
+        if (mixer) {
+          mixer.timeScale = speed
+        }
+      })
+
+      // Watch for lighting changes
+      watch(() => [
+        debugParams.value.ambientIntensity,
+        debugParams.value.dirIntensity,
+        debugParams.value.dirX,
+        debugParams.value.dirY,
+        debugParams.value.dirZ
+      ], ([ambInt, dirInt, dx, dy, dz]) => {
+        if (hemisphereLight) hemisphereLight.intensity = ambInt
+        if (directionalLight) {
+          directionalLight.intensity = dirInt
+          directionalLight.position.set(dx, dy, dz)
+        }
+      })
+
+      // Watch replay trigger
+      watch(replayTrigger, () => {
+         if (mixer) {
+           const action = mixer.existingAction(mixer._actions[0]._clip)
+           if (action) {
+             action.stop()
+             action.reset()
+             action.time = debugParams.value.animStart
+             action.paused = false
+             action.play()
+           }
+         }
+      })
+      // Find the rope bone/mesh to attach the bracelet
+      const ropeBone = model.getObjectByName('rope_joint')
+      const ropeMesh = model.getObjectByName('rope_mesh')
       if (ropeMesh) ropeMesh.visible = false
 
       if (ropeBone && diyUrl) {
         const beadGroup = new THREE.Group()
         beadGroup.name = 'AnimatedBeads'
-        ropeBone.add(beadGroup)
+        // ropeBone.add(beadGroup) // Moved to debugWrapper
 
         const localToBone = new THREE.Matrix4()
         const targetMatrix = new THREE.Matrix4()
@@ -1217,7 +1456,7 @@ const createViewerScene = (mountEl, options) => {
               diyRoot.rotateX(-0.2)
             }
 
-            diyRoot.position.set(0.5, -0.2, 0)
+            diyRoot.position.set(0, 0, 0)
             diyRoot.scale.set(100, 100, 100)
             const nonUniformScale = new THREE.Vector3(1.05, 1.05, 1.05)
             diyRoot.scale.multiply(nonUniformScale)
@@ -1231,9 +1470,12 @@ const createViewerScene = (mountEl, options) => {
                 obj.scale.multiply(inverseScale)
               }
             })
-            ropeBone.add(diyRoot)
 
+            
+            // Apply auto-scaling (fitScale) BEFORE adding to debugWrapper
+            // This ensures debugWrapper's scale is applied ON TOP of the fitted scale
             if (ropeMesh) {
+              ropeBone.add(diyRoot) // Temporarily add to bone for calculation
               ropeBone.updateMatrixWorld(true)
               diyRoot.updateMatrixWorld(true)
               const ropeBox = new THREE.Box3().setFromObject(ropeMesh)
@@ -1246,7 +1488,30 @@ const createViewerScene = (mountEl, options) => {
                 diyRoot.scale.multiplyScalar(fitScale)
                 diyRoot.updateMatrixWorld(true)
               }
+              ropeBone.remove(diyRoot) // Remove after calculation
             }
+
+            // Create a wrapper for debug adjustments
+            const debugWrapper = new THREE.Group()
+            debugWrapper.name = 'DebugWrapper'
+            
+            // Apply initial debug params
+            debugWrapper.scale.set(braceletDebugParams.value.scale, braceletDebugParams.value.scale, braceletDebugParams.value.scale)
+            debugWrapper.rotation.set(braceletDebugParams.value.rotX, braceletDebugParams.value.rotY, braceletDebugParams.value.rotZ)
+            debugWrapper.position.set(braceletDebugParams.value.posX, braceletDebugParams.value.posY, braceletDebugParams.value.posZ)
+            
+            debugWrapper.add(diyRoot)
+            debugWrapper.add(beadGroup) // Add beads to debug wrapper
+            ropeBone.add(debugWrapper)
+
+            // Watch bracelet debug params
+            watch(braceletDebugParams, (newVal) => {
+              if (debugWrapper) {
+                debugWrapper.scale.set(newVal.scale, newVal.scale, newVal.scale)
+                debugWrapper.rotation.set(newVal.rotX, newVal.rotY, newVal.rotZ)
+                debugWrapper.position.set(newVal.posX, newVal.posY, newVal.posZ)
+              }
+            }, { deep: true })
 
             const baseLocalPosition = diyRoot.position.clone()
             const baseLocalScale = diyRoot.scale.clone()
@@ -1272,13 +1537,15 @@ const createViewerScene = (mountEl, options) => {
 
             diyRoot.updateMatrixWorld(true)
             ropeBone.updateMatrixWorld(true)
-            const ropeWorldInv = localToBone.copy(ropeBone.matrixWorld).invert()
+            debugWrapper.updateMatrixWorld(true)
+            // Calculate relative to debugWrapper instead of ropeBone
+            const wrapperInv = localToBone.copy(debugWrapper.matrixWorld).invert()
 
             diyRoot.traverse((obj) => {
               const extras = obj.userData || {}
               if (!extras.isMarbleRoot) return
               obj.updateMatrixWorld(true)
-              targetMatrix.multiplyMatrices(ropeWorldInv, obj.matrixWorld)
+              targetMatrix.multiplyMatrices(wrapperInv, obj.matrixWorld)
               targetMatrix.decompose(targetPos, targetQuat, targetScale)
               const beadClone = obj.clone(true)
               beadClone.position.copy(targetPos)
@@ -1316,16 +1583,32 @@ const createViewerScene = (mountEl, options) => {
     }
   )
 
+  const controls = new OrbitControls(camera, renderer.domElement)
+  controls.enableDamping = true
+  controls.dampingFactor = 0.05
+  controls.enableZoom = true
+  controls.enableRotate = true
+
   const animate = () => {
     if (disposed) return
     animationId = requestAnimationFrame(animate)
     const delta = clock.getDelta()
     if (mixer) {
+      const action = mixer.existingAction(mixer._actions[0]._clip)
+      if (action) {
+         // console.log('Action time:', action.time, 'Start:', debugParams.value.animStart, 'End:', debugParams.value.animEnd)
+         if (action.time >= debugParams.value.animEnd) {
+           action.paused = true
+           action.time = debugParams.value.animEnd
+         }
+         // Also ensure we don't go before start
+         if (action.time < debugParams.value.animStart) {
+            action.time = debugParams.value.animStart
+         }
+      }
       mixer.update(delta)
-      // Check if action finished
-      // Since we use clampWhenFinished = true and LoopOnce, we can check if time >= duration
-      // But simpler is to use the 'finished' event on the mixer
     }
+    controls.update()
     renderer.render(scene, camera)
     if (onPostRender) onPostRender(renderer.domElement)
   }
@@ -1454,8 +1737,55 @@ const createViewerScene = (mountEl, options) => {
   cursor: pointer;
 }
 .preview-btn:active {
-  transform: scale(0.95);
+  transform: scale(0.98);
   opacity: 0.9;
   background: rgba(255, 255, 255, 0.3);
+}
+
+.debug-panel {
+  position: fixed;
+  top: 100px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 10px;
+  border-radius: 8px;
+  color: white;
+  z-index: 1000;
+  font-size: 12px;
+}
+
+.debug-panel-right {
+  left: auto;
+  right: 10px;
+}
+
+.debug-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.debug-btn {
+  background: #4CAF50;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  margin-top: 5px;
+  font-size: 12px;
+  width: 100%;
+}
+
+.debug-item text {
+  width: 50px;
+}
+
+.debug-item input {
+  width: 60px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 2px 5px;
+  border-radius: 4px;
 }
 </style>
