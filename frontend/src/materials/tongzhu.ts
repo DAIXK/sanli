@@ -66,7 +66,7 @@ export default {
       },
       
       {
-        glb: '/static/models/白玛瑙1.gltf',
+        glb: '/static/models/白玛瑙1.glb',
         name: '白玛瑙',
         weight: '2',
         width: '6mm',

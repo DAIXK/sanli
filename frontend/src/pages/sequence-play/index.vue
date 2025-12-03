@@ -13,7 +13,7 @@
       ref="viewerMountRef"
     ></view>
     <view class="stage-indicator">{{ stageLabel }}</view>
-    <view class="toast" v-if="loadingText">{{ loadingText }}</view>
+    <!-- <view class="toast" v-if="loadingText">{{ loadingText }}</view> -->
     <view class="error" v-if="errorText">{{ errorText }}</view>
     
     <!-- Download Button -->
