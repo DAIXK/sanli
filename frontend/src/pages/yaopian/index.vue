@@ -8,7 +8,7 @@
 
 <script setup>
 import BraceletPage from '../../components/BraceletPage.vue'
+import { loadBraceletMaterials } from '../../utils/materialApi'
 
-const loadConfig = () =>
-  import('../../materials/yaopian').then((module) => module.default || module)
+const loadConfig = () => loadBraceletMaterials()
 </script>

@@ -7,22 +7,7 @@
 
 <script setup>
 import BraceletPage from '../../components/BraceletPage.vue'
+import { loadBraceletMaterials } from '../../utils/materialApi'
 
-const loadConfig = async () => {
-  const [tongzhu, yaopian] = await Promise.all([
-    import('../../materials/tongzhu'),
-    import('../../materials/yaopian')
-  ])
-
-  const normalize = (module) => {
-    if (!module) return {}
-    const config = module.default ?? module
-    return typeof config === 'object' && config ? config : {}
-  }
-
-  return {
-    ...normalize(tongzhu),
-    ...normalize(yaopian)
-  }
-}
+const loadConfig = () => loadBraceletMaterials()
 </script>

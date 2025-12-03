@@ -209,6 +209,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { requestJson } from '../utils/api'
 //可按 “radial/tangent/normal” 三种轴向做世界坐标旋转
 
 const props = defineProps({
@@ -225,7 +226,34 @@ const props = defineProps({
     default: () => ({})
   }
 })
+
 const normalizeCollection = (collection) => (Array.isArray(collection) ? collection : [])
+const ROTATION_PRESETS = Object.freeze({
+  RADIAL_ROTATION: (3 * Math.PI) / 2,
+  NORMAL_ROTATION: Math.PI / 2,
+  TANGENT_ROTATION: 0
+})
+const parseRotationValue = (value) => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const key = value.trim().toUpperCase()
+    if (Object.prototype.hasOwnProperty.call(ROTATION_PRESETS, key)) {
+      return ROTATION_PRESETS[key]
+    }
+    const numeric = Number(value)
+    if (Number.isFinite(numeric)) return numeric
+  }
+  return null
+}
+const normalizeRotationAxis = (axis) => {
+  const normalized = typeof axis === 'string' ? axis.toLowerCase() : ''
+  return ['radial', 'tangent', 'normal'].includes(normalized) ? normalized : 'radial'
+}
+const createGLTFLoader = () => {
+  const loader = new GLTFLoader()
+  loader.setCrossOrigin('anonymous')
+  return loader
+}
 const transformMaterialEntry = (entry = {}) => ({
   ...entry,
   price: Number(entry.price) || 0,
@@ -237,7 +265,12 @@ const transformMaterialEntry = (entry = {}) => ({
   product: normalizeCollection(entry.product).map((item) => ({
     ...item,
     glb: item.glb || '',
-    png: item.png || ''
+    png: item.png || '',
+    rotation: (() => {
+      const parsed = parseRotationValue(item.rotation)
+      return Number.isFinite(parsed) ? parsed : undefined
+    })(),
+    rotationAxis: normalizeRotationAxis(item.rotationAxis)
   }))
 })
 const transformMaterialConfig = (config = {}) =>
@@ -332,15 +365,9 @@ const loadMaterials = async () => {
 }
 
 const loadGlobalSettings = async () => {
-  if (typeof fetch !== 'function') return
   try {
-    const response = await fetch('/api/materials', {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    })
-    if (!response.ok) return
-    const payload = await response.json().catch(() => null)
-    const price = Number(payload?.settings?.gold_price_per_gram)
+    const payload = await requestJson('/api/mobile/gold-price')
+    const price = Number(payload?.price ?? payload?.settings?.gold_price_per_gram)
     if (Number.isFinite(price) && price > 0) {
       goldPricePerGram.value = price
     }
@@ -701,7 +728,7 @@ const loadHandModel = () => {
   if (handModel) return Promise.resolve(handModel)
   if (handModelPromise) return handModelPromise
   handModelPromise = new Promise((resolve, reject) => {
-    const loader = new GLTFLoader()
+    const loader = createGLTFLoader()
     loader.load(
       HAND_MODEL_URL,
       (gltf) => {
@@ -1871,7 +1898,7 @@ const loadModel = () => {
       reject(new Error('未找到手串模型'))
       return
     }
-    const loader = new GLTFLoader()
+    const loader = createGLTFLoader()
     loader.load(
       url,
       (gltf) => {
@@ -2772,7 +2799,7 @@ const loadMarbleTemplate = (glbPath) => {
     return Promise.resolve(cached)
   }
   return new Promise((resolve, reject) => {
-    const loader = new GLTFLoader()
+    const loader = createGLTFLoader()
     loader.load(
       glbPath,
       (gltf) => {
