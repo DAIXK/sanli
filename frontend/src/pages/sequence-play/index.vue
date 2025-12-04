@@ -195,6 +195,7 @@ const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000 // 7 days
 const uploadState = ref('idle') // idle | uploading | success | error
 const uploadError = ref('')
 const uploadedVideoUrl = ref('')
+const autoRecordEnabled = ref(true)
 const recordingOverlayEnabled = ref(true)
 const recordingOverlayVisible = ref(false)
 const toggleRecordingOverlay = () => {
@@ -212,6 +213,59 @@ const notify = (title, icon = 'none') => {
   }
 }
 
+const buildQueryString = (params = {}) => {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null) return
+    search.append(key, String(value))
+  })
+  const str = search.toString()
+  return str ? `?${str}` : ''
+}
+
+const sendVideoUrlToMiniProgram = (url) => {
+  if (!url) return false
+  const extras = {
+    ringSize: sequenceConfig.value?.ringSize,
+    braceletId: sequenceConfig.value?.braceletId,
+    braceletName: sequenceConfig.value?.braceletName,
+    productId: sequenceConfig.value?.productId,
+    productName: sequenceConfig.value?.productName,
+    beadSize: sequenceConfig.value?.beadSize,
+    price: sequenceConfig.value?.price,
+    formattedPrice: sequenceConfig.value?.formattedPrice,
+    selectedProductIndex: sequenceConfig.value?.selectedProductIndex,
+    marbleCount: sequenceConfig.value?.marbleCount
+  }
+  const payload = {
+    action: 'navigateToVideo',
+    url,
+    videoUrl: url,
+    ...extras
+  }
+  const query = buildQueryString({ videoUrl: url, ...extras })
+  let delivered = false
+  try {
+    const bridge = window?.wx?.miniProgram
+    if (bridge) {
+      if (typeof bridge.postMessage === 'function') {
+        bridge.postMessage({ data: payload })
+        delivered = true
+        console.log('Recorder: postMessage video url to mini program', url)
+      }
+      if (typeof bridge.navigateTo === 'function') {
+        const target = `/pages/video/index${query}`
+        bridge.navigateTo({ url: target })
+        delivered = true
+        console.log('Recorder: navigateTo mini program video page', target)
+      }
+    }
+  } catch (error) {
+    console.warn('Mini program communication failed', error)
+  }
+  return delivered
+}
+
 const uploadRecordedVideo = async (blob, mimeType) => {
   if (!(blob instanceof Blob) || blob.size <= 0) {
     throw new Error('无效的视频数据')
@@ -221,14 +275,21 @@ const uploadRecordedVideo = async (blob, mimeType) => {
   }
   uploadState.value = 'uploading'
   uploadError.value = ''
-  const ext = mimeType?.includes?.('mp4') ? 'mp4' : 'webm'
+  const useMp4 = mimeType?.includes?.('mp4')
+  const safeType = useMp4 ? 'video/mp4' : 'video/webm'
+  const ext = useMp4 ? 'mp4' : 'webm'
+  const normalizedFile = new File([blob], `bracelet-${Date.now()}.${ext}`, { type: safeType })
   const formData = new FormData()
-  formData.append('file', blob, `bracelet-${Date.now()}.${ext}`)
+  formData.append('file', normalizedFile)
+  // 兼容后端字段名可能是 video
+  formData.append('video', normalizedFile)
   const endpoint = buildApiUrl('/api/mobile/upload-video')
 
   try {
     const response = await fetch(endpoint, { method: 'POST', body: formData })
     if (!response.ok) {
+      const errorText = await response.text().catch(() => '')
+      console.warn('视频上传接口返回非 2xx', response.status, errorText)
       throw new Error(`上传失败 (${response.status})`)
     }
     const contentType = response.headers?.get?.('content-type') || ''
@@ -248,6 +309,7 @@ const uploadRecordedVideo = async (blob, mimeType) => {
     uploadState.value = 'success'
     if (uploadedVideoUrl.value) {
       console.log('Recorder: uploaded video url', uploadedVideoUrl.value)
+      sendVideoUrlToMiniProgram(uploadedVideoUrl.value)
     }
     notify('视频上传成功', 'success')
     return result
@@ -455,6 +517,7 @@ const startRecording = () => {
     return
   }
 
+  // 优先 mp4，不支持则回退 webm
   const mimeTypes = [
     'video/mp4;codecs=avc1',
     'video/mp4',
@@ -471,6 +534,7 @@ const startRecording = () => {
   
   if (!selectedMimeType) {
     console.warn('MediaRecorder: No supported mime type found')
+    notify('当前环境不支持录屏', 'none')
     return
   }
   console.log('Recorder: using mime type', selectedMimeType)
@@ -741,11 +805,27 @@ const prepareSequenceConfig = () => {
   const camPitch = parseNumber(params.get('camPitch'), DEFAULT_CAM_PITCH)
   const spinSpeed = parseNumber(params.get('spinSpeed'), DEFAULT_SPIN_SPEED)
   const spinTurns = parseNumber(params.get('spinTurns'), DEFAULT_SPIN_TURNS)
+  const overlayParam = (params.get('overlay') || '').toLowerCase()
+  const autoRecordParam = (params.get('autoRecord') || '').toLowerCase()
+  recordingOverlayEnabled.value =
+    overlayParam === '' || overlayParam === '1' || overlayParam === 'true'
+  autoRecordEnabled.value = autoRecordParam === '' || autoRecordParam === '1' || autoRecordParam === 'true'
 
   const assemblySource = assemblyModel || diy || ''
   const viewerSource = viewerModel || diy || ''
   const useCachedAssembly = !assemblySource && hasCachedPayload
   const useCachedViewer = !viewerSource && hasCachedPayload
+
+  const braceletId = decodeOrRaw(params.get('braceletId'))
+  const braceletName = decodeOrRaw(params.get('braceletName'))
+  const productId = decodeOrRaw(params.get('productId'))
+  const productName = decodeOrRaw(params.get('productName'))
+  const ringSize = decodeOrRaw(params.get('ringSize'))
+  const beadSize = decodeOrRaw(params.get('beadSize'))
+  const price = decodeOrRaw(params.get('price'))
+  const formattedPrice = decodeOrRaw(params.get('formattedPrice'))
+  const selectedProductIndex = parseNumber(params.get('selectedProductIndex'), null)
+  const marbleCount = parseNumber(params.get('marbleCount'), null)
 
   sequenceConfig.value = {
     assemblyDiy: assemblySource,
@@ -761,7 +841,17 @@ const prepareSequenceConfig = () => {
     spinSpeed,
     spinTurns,
     useCachedAssembly,
-    useCachedViewer
+    useCachedViewer,
+    braceletId,
+    braceletName,
+    productId,
+    productName,
+    ringSize,
+    beadSize,
+    price,
+    formattedPrice,
+    selectedProductIndex,
+    marbleCount
   }
 
   if (!sequenceConfig.value.assemblyDiy && !useCachedAssembly) {
@@ -913,7 +1003,9 @@ watch(stage, (value, prev) => {
 
 onMounted(() => {
   prepareSequenceConfig()
-  startRecording() // Start recording immediately
+  if (autoRecordEnabled.value) {
+    startRecording() // Start recording immediately
+  }
   startStage(stage.value)
 })
 

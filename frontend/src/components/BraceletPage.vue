@@ -22,19 +22,11 @@
       <view class="toolbar-actions">
       <button
         class="ghost-button"
-        :class="{ 'is-disabled': !canGenerateVideo }"
-        :disabled="!canGenerateVideo"
+        :class="{ 'is-disabled': !canGenerateVideo || videoGenerating }"
+        :disabled="!canGenerateVideo || videoGenerating"
         @tap="handleGenerateVideo"
       >
-        生成视频
-      </button>
-      <button
-        class="ghost-button ghost-button--secondary"
-        :class="{ 'is-disabled': !canExportModel || modelExporting }"
-        :disabled="!canExportModel || modelExporting"
-        @tap="handleExportModel"
-      >
-        {{ modelExporting ? '导出中…' : '导出模型' }}
+        {{ videoGenerating ? '生成中…' : '生成视频' }}
       </button>
       <!-- <button
         class="ghost-button ghost-button--secondary"
@@ -411,6 +403,7 @@ const activeBraceletMaxBeads = computed(() => {
 })
 const canAddMoreMarbles = computed(() => marbleCount.value < activeBraceletMaxBeads.value)
 const CANVAS_ID = 'modelCanvas'
+const videoGenerating = ref(false)
 
 const parseWidthToDiameter = (width) => {
   if (typeof width === 'number') {
@@ -590,9 +583,6 @@ const sceneReady = ref(false)
 const marbleLimit = ref(Infinity)
 const canGenerateVideo = computed(() => marbleCount.value > 0)
 const modelExporting = ref(false)
-const canExportModel = computed(
-  () => sceneReady.value && marbleCount.value > 0 && !!ringRoot
-)
 const DIY_MODEL_CACHE_KEY = 'bracelet_diy_model_cache'
 // Use the actual UniApp route for the sequence player page
 const SEQUENCE_PLAY_INTERNAL_PAGE = '/pages/sequence-play/index'
@@ -1011,7 +1001,8 @@ const handlePageTouchEnd = (event) => {
   }
   swipeState.active = false
 }
-const handleGenerateVideo = () => {
+const handleGenerateVideo = async () => {
+  if (videoGenerating.value) return
   if (!canGenerateVideo.value) {
     if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
       uni.showToast({
@@ -1021,41 +1012,44 @@ const handleGenerateVideo = () => {
     }
     return
   }
-  const baseVideoPageUrl = '/pages/video/index'
-  const detailPayload = {
-    price: price.value,
-    formattedPrice: formattedPrice.value,
-    ringSize: formattedRingLength.value,
-    beadSize: beadSizeLabels.value[selectedBeadSizeIndex.value] || '',
-    braceletId: activeBracelet.value?.id || '',
-    braceletName: activeBraceletName.value,
-    productName: activeProduct.value?.name || '',
-    productId: activeProduct.value?.id || '',
-    selectedProductIndex: selectedProductIndex.value,
-    marbleCount: marbleCount.value
+  videoGenerating.value = true
+  try {
+    const blob = await exportBraceletModel()
+    const fileName = buildExportFileName()
+    const cached = await cacheBraceletModel(blob, fileName)
+    if (!cached) {
+      throw new Error('无法缓存模型')
+    }
+    const detailPayload = {
+      price: price.value,
+      formattedPrice: formattedPrice.value,
+      ringSize: formattedRingLength.value,
+      beadSize: beadSizeLabels.value[selectedBeadSizeIndex.value] || '',
+      braceletId: activeBracelet.value?.id || '',
+      braceletName: activeBraceletName.value,
+      productName: activeProduct.value?.name || '',
+      productId: activeProduct.value?.id || '',
+      selectedProductIndex: selectedProductIndex.value,
+      marbleCount: marbleCount.value
+    }
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '生成中，请稍候',
+        icon: 'none'
+      })
+    }
+    await navigateToSequencePlay({ autoRecord: 1, overlay: 1, ...detailPayload })
+  } catch (error) {
+    console.error('生成视频失败', error)
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '生成失败，请重试',
+        icon: 'none'
+      })
+    }
+  } finally {
+    videoGenerating.value = false
   }
-  const videoPageUrl = buildMiniProgramUrl(baseVideoPageUrl, detailPayload)
-  const message = {
-    action: 'navigateToVideo',
-    payload: { url: videoPageUrl },
-    ...detailPayload
-  }
-
-  sendMessageToMiniProgram(message)
-
-  if (navigatedByMiniProgramBridge(videoPageUrl)) {
-    return
-  }
-
-  if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
-    uni.showToast({
-      title: '生成中，请稍候',
-      icon: 'none'
-    })
-    return
-  }
-
-  console.info('Generate video triggered', message)
 }
 
 const sanitizeFileName = (text) => {
@@ -1101,18 +1095,30 @@ const resolveSequencePlayTarget = () => {
   }
 }
 
-const openSequencePlayPage = async () => {
+const buildQueryString = (params = {}) => {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null) return
+    search.append(key, String(value))
+  })
+  const str = search.toString()
+  return str ? `?${str}` : ''
+}
+
+const openSequencePlayPage = async (queryParams = {}) => {
   const { path, url } = resolveSequencePlayTarget()
   if (!path && !url) {
     console.warn('sequence-play 地址为空，无法跳转')
     return false
   }
+  const query = buildQueryString(queryParams)
 
   if (path) {
+    const finalPath = `${path}${query}`
     const tryUniRedirect = async () => {
       if (typeof uni === 'undefined' || typeof uni.redirectTo !== 'function') return false
       try {
-        await uni.redirectTo({ url: path })
+        await uni.redirectTo({ url: finalPath })
         return true
       } catch (error) {
         console.warn('uni.redirectTo 跳转 sequence-play 失败', error)
@@ -1122,7 +1128,7 @@ const openSequencePlayPage = async () => {
     const tryUniNavigate = async () => {
       if (typeof uni === 'undefined' || typeof uni.navigateTo !== 'function') return false
       try {
-        await uni.navigateTo({ url: path })
+        await uni.navigateTo({ url: finalPath })
         return true
       } catch (error) {
         console.warn('uni.navigateTo 跳转 sequence-play 失败', error)
@@ -1136,7 +1142,8 @@ const openSequencePlayPage = async () => {
 
   if (url) {
     try {
-      window.location.replace(url)
+      const finalUrl = query ? `${url}${query}` : url
+      window.location.replace(finalUrl)
       return true
     } catch (error) {
       console.warn('window 跳转 sequence-play 失败', error)
@@ -1145,7 +1152,7 @@ const openSequencePlayPage = async () => {
   return false
 }
 
-const navigateToSequencePlay = () => openSequencePlayPage()
+const navigateToSequencePlay = (query) => openSequencePlayPage(query)
 
 const blobToDataUrl = (blob) =>
   new Promise((resolve, reject) => {
@@ -1251,54 +1258,6 @@ const downloadBlob = (blob, filename) => {
   } catch (error) {
     console.warn('下载模型失败', error)
     return false
-  }
-}
-
-const handleExportModel = async () => {
-  if (modelExporting.value) return
-  if (!canExportModel.value) {
-    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
-      uni.showToast({
-        title: '请先完成珠子选择',
-        icon: 'none'
-      })
-    }
-    return
-  }
-  if (!isH5) {
-    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
-      uni.showToast({
-        title: '请在 H5 端导出模型',
-        icon: 'none'
-      })
-    }
-    return
-  }
-  modelExporting.value = true
-  try {
-    const blob = await exportBraceletModel()
-    const fileName = buildExportFileName()
-    const cached = await cacheBraceletModel(blob, fileName)
-    if (!cached) {
-      throw new Error('无法缓存模型')
-    }
-    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
-      uni.showToast({
-        title: '模型已缓存，可直接播放',
-        icon: 'none'
-      })
-    }
-    navigateToSequencePlay()
-  } catch (error) {
-    console.error('导出模型失败', error)
-    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
-      uni.showToast({
-        title: '导出失败，请重试',
-        icon: 'none'
-      })
-    }
-  } finally {
-    modelExporting.value = false
   }
 }
 

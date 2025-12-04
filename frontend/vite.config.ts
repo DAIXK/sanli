@@ -6,7 +6,7 @@ const uni = typeof uniPlugin === 'function' ? uniPlugin : (uniPlugin as any).def
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const apiBase = env.VITE_API_BASE_URL || 'http://localhost:3000'
+  const apiBase = env.VITE_API_BASE_URL || 'http://192.168.5.195:3000'
 
   return {
     plugins: [
