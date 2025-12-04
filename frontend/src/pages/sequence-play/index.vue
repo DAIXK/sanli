@@ -1,6 +1,15 @@
 <template>
   <view class="page" :style="pageStyle">
     <view
+      v-if="recordingOverlayEnabled && recordingOverlayVisible"
+      class="recording-overlay"
+    >
+      <text class="recording-overlay__text">生成中…</text>
+    </view>
+    <view class="overlay-toggle" @tap="toggleRecordingOverlay">
+      {{ recordingOverlayEnabled ? '遮罩开' : '遮罩关' }}
+    </view>
+    <view
       v-show="stage === 'assembly'"
       class="canvas-container"
       :style="containerStyle"
@@ -25,15 +34,6 @@
       下载视频
     </view>
     
-    <!-- Preview Button -->
-    <view 
-      class="preview-btn" 
-      v-if="showDownloadBtn"
-      @tap="navigateToPreview"
-    >
-      预览视频
-    </view>
-
     <!-- Left Debug Panel (Model & Camera) -->
     <view class="debug-panel" v-if="stage === 'viewer' && debugParams.showPanel">
       <view class="debug-item">
@@ -145,6 +145,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 
 import { saveModelToDB, loadModelFromDB } from '../../utils/db.js'
+import { buildApiUrl } from '../../utils/api'
 
 const DIY_CACHE_KEY = 'bracelet_diy_model_cache'
 const VIDEO_CACHE_KEY = 'bracelet_generated_video_cache'
@@ -191,8 +192,79 @@ const braceletDebugParams = ref({
 const DEFAULT_BG = '/static/img/background.png'
 const VIDEO_FILE_REGEX = /\.(mp4|webm|ogg|m4v)$/i
 const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000 // 7 days
+const uploadState = ref('idle') // idle | uploading | success | error
+const uploadError = ref('')
+const uploadedVideoUrl = ref('')
+const recordingOverlayEnabled = ref(true)
+const recordingOverlayVisible = ref(false)
+const toggleRecordingOverlay = () => {
+  recordingOverlayEnabled.value = !recordingOverlayEnabled.value
+  if (!recordingOverlayEnabled.value) {
+    recordingOverlayVisible.value = false
+  } else if (mediaRecorder.value && mediaRecorder.value.state === 'recording') {
+    recordingOverlayVisible.value = true
+  }
+}
+
+const notify = (title, icon = 'none') => {
+  if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+    uni.showToast({ title, icon })
+  }
+}
+
+const uploadRecordedVideo = async (blob, mimeType) => {
+  if (!(blob instanceof Blob) || blob.size <= 0) {
+    throw new Error('无效的视频数据')
+  }
+  if (typeof fetch !== 'function' || typeof FormData === 'undefined') {
+    throw new Error('当前环境不支持视频上传')
+  }
+  uploadState.value = 'uploading'
+  uploadError.value = ''
+  const ext = mimeType?.includes?.('mp4') ? 'mp4' : 'webm'
+  const formData = new FormData()
+  formData.append('file', blob, `bracelet-${Date.now()}.${ext}`)
+  const endpoint = buildApiUrl('/api/mobile/upload-video')
+
+  try {
+    const response = await fetch(endpoint, { method: 'POST', body: formData })
+    if (!response.ok) {
+      throw new Error(`上传失败 (${response.status})`)
+    }
+    const contentType = response.headers?.get?.('content-type') || ''
+    let result = null
+    if (contentType.includes('application/json')) {
+      result = await response.json().catch(() => null)
+    } else {
+      const text = await response.text()
+      try {
+        result = text ? JSON.parse(text) : null
+      } catch {
+        result = { url: text }
+      }
+    }
+    uploadedVideoUrl.value =
+      result?.url || result?.videoUrl || result?.data?.url || uploadedVideoUrl.value
+    uploadState.value = 'success'
+    if (uploadedVideoUrl.value) {
+      console.log('Recorder: uploaded video url', uploadedVideoUrl.value)
+    }
+    notify('视频上传成功', 'success')
+    return result
+  } catch (error) {
+    uploadState.value = 'error'
+    uploadError.value = error?.message || '上传失败'
+    console.warn('视频上传失败', error)
+    notify('视频上传失败', 'none')
+    throw error
+  }
+}
 
 
+
+// Recording defaults / fallback
+const RECORDING_MAX_DURATION = 15_000 // force stop after 15s to ensure onstop runs
+let recordingTimeout = null
 
 // Assembly defaults
 const DEFAULT_RING_RADIUS = 1.185
@@ -285,17 +357,84 @@ let viewerCleanup = null
 let recordingCanvas = null
 const mediaRecorder = ref(null)
 const recordedChunks = ref([])
+const lastRecordedBlob = ref(null)
 const showDownloadBtn = ref(false)
 const downloadUrl = ref('')
 const downloadExt = ref('webm')
 
+const finalizeRecording = async (blob, mimeType) => {
+  if (!(blob instanceof Blob)) return
+  lastRecordedBlob.value = blob
+  downloadUrl.value = URL.createObjectURL(blob)
+  downloadExt.value = mimeType.includes('mp4') ? 'mp4' : 'webm'
+  showDownloadBtn.value = true
+  console.log('Recorder: download button should show')
+
+  try {
+    await saveModelToDB(VIDEO_CACHE_KEY, {
+      blob,
+      type: mimeType,
+      savedAt: Date.now()
+    })
+    console.log('Recorder: video cached to IndexedDB')
+  } catch (error) {
+    console.warn('Recorder: failed to cache video', error)
+  }
+
+  try {
+    console.log('Recorder: start upload to /api/mobile/upload-video')
+    await uploadRecordedVideo(blob, mimeType)
+  } catch (error) {
+    console.warn('Recorder: upload failed', error)
+  } finally {
+    recordingOverlayVisible.value = false
+  }
+}
+
+const clearRecordingTimeout = () => {
+  if (recordingTimeout) {
+    clearTimeout(recordingTimeout)
+    recordingTimeout = null
+  }
+}
+
+const forceStopRecording = () => {
+  if (mediaRecorder.value && mediaRecorder.value.state === 'recording') {
+    console.log('Recorder: force stop (timeout reached)')
+    mediaRecorder.value.stop()
+    return
+  }
+  if (!lastRecordedBlob.value && recordedChunks.value.length) {
+    const mime = recordedChunks.value[0]?.type || 'video/webm'
+    const blob = new Blob(recordedChunks.value, { type: mime })
+    console.log('Recorder: force finalize after timeout, blob size', blob.size)
+    finalizeRecording(blob, mime)
+  }
+}
+
 const startRecording = () => {
+  recordedChunks.value = []
+  downloadUrl.value = ''
+  uploadedVideoUrl.value = ''
+  uploadState.value = 'idle'
+  uploadError.value = ''
+  lastRecordedBlob.value = null
+  recordingOverlayVisible.value = recordingOverlayEnabled.value
+  clearRecordingTimeout()
   // Create canvas programmatically to avoid uni-app template issues
   if (!recordingCanvas) {
     recordingCanvas = document.createElement('canvas')
   }
+  if (!recordingCanvas.parentNode && typeof document !== 'undefined') {
+    // Some browsers require the canvas to be in the DOM for captureStream
+    recordingCanvas.style.position = 'fixed'
+    recordingCanvas.style.pointerEvents = 'none'
+    recordingCanvas.style.opacity = '0'
+    recordingCanvas.style.zIndex = '-1'
+    document.body.appendChild(recordingCanvas)
+  }
   const canvas = recordingCanvas
-  
+ 
   // Ensure canvas size matches design or screen
   canvas.width = window.innerWidth * window.devicePixelRatio
   canvas.height = window.innerHeight * window.devicePixelRatio
@@ -312,6 +451,7 @@ const startRecording = () => {
 
   if (!stream) {
     console.warn('MediaRecorder: captureStream not supported')
+    notify('当前环境不支持录屏', 'none')
     return
   }
 
@@ -351,28 +491,14 @@ const startRecording = () => {
       console.log('Recorder: stopped. Total chunks:', recordedChunks.value.length)
       const blob = new Blob(recordedChunks.value, { type: selectedMimeType })
       console.log('Recorder: blob created, size:', blob.size)
-      downloadUrl.value = URL.createObjectURL(blob)
-      // Store extension for download
-      downloadExt.value = selectedMimeType.includes('mp4') ? 'mp4' : 'webm'
-      showDownloadBtn.value = true
-      console.log('Recorder: download button should show')
-
-      // Cache video to IndexedDB
-      try {
-        await saveModelToDB(VIDEO_CACHE_KEY, {
-          blob,
-          type: selectedMimeType,
-          savedAt: Date.now()
-        })
-        console.log('Recorder: video cached to IndexedDB')
-      } catch (error) {
-        console.warn('Recorder: failed to cache video', error)
-      }
+      await finalizeRecording(blob, selectedMimeType)
     }
     
     recorder.start()
     mediaRecorder.value = recorder
     console.log('Recorder: started')
+    clearRecordingTimeout()
+    recordingTimeout = setTimeout(forceStopRecording, RECORDING_MAX_DURATION)
   } catch (error) {
     console.warn('MediaRecorder init failed:', error)
   }
@@ -380,11 +506,17 @@ const startRecording = () => {
 
 const stopRecording = () => {
   console.log('Recorder: stop requested')
+  clearRecordingTimeout()
   if (mediaRecorder.value && mediaRecorder.value.state !== 'inactive') {
     mediaRecorder.value.stop()
   } else {
     console.log('Recorder: cannot stop, state is', mediaRecorder.value?.state)
+    if (lastRecordedBlob.value) {
+      console.log('Recorder: using last recorded blob to finalize')
+      finalizeRecording(lastRecordedBlob.value, lastRecordedBlob.value.type || 'video/webm')
+    }
   }
+  recordingOverlayVisible.value = false
 }
 
 const downloadVideo = () => {
@@ -396,12 +528,6 @@ const downloadVideo = () => {
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
-}
-
-const navigateToPreview = () => {
-  uni.navigateTo({
-    url: '/pages/video-result/index'
-  })
 }
 
 const handlePostRender = (sourceCanvas) => {
@@ -798,6 +924,7 @@ onBeforeUnmount(() => {
     URL.revokeObjectURL(url)
   })
   cachedObjectUrls.clear()
+  recordingOverlayVisible.value = false
 })
 
 const createAssemblyScene = (mountEl, options) => {
@@ -1239,6 +1366,8 @@ const createViewerScene = (mountEl, options) => {
   const { diyUrl, baseModelUrl, backgroundUrl, onProgress, onError, onPostRender, onFinished } = options
   let disposed = false
   let animationId = 0
+  let viewerFinished = false
+  let viewerFinishTimer = null
   const scene = new THREE.Scene()
   const cleanupBackground = setupSceneBackground(scene, backgroundUrl || DEFAULT_BG, 0x000000)
 
@@ -1589,6 +1718,18 @@ const createViewerScene = (mountEl, options) => {
   controls.enableZoom = true
   controls.enableRotate = true
 
+  const markViewerFinished = () => {
+    if (viewerFinished) return
+    viewerFinished = true
+    if (viewerFinishTimer) {
+      clearTimeout(viewerFinishTimer)
+      viewerFinishTimer = null
+    }
+    if (typeof onFinished === 'function') {
+      onFinished()
+    }
+  }
+
   const animate = () => {
     if (disposed) return
     animationId = requestAnimationFrame(animate)
@@ -1605,6 +1746,11 @@ const createViewerScene = (mountEl, options) => {
          if (action.time < debugParams.value.animStart) {
             action.time = debugParams.value.animStart
          }
+         const clipDuration = action._clip?.duration || 0
+         const endTime = Math.min(debugParams.value.animEnd || clipDuration, clipDuration || Infinity)
+         if (action.time >= endTime - 1e-3) {
+           markViewerFinished()
+         }
       }
       mixer.update(delta)
     }
@@ -1612,6 +1758,8 @@ const createViewerScene = (mountEl, options) => {
     renderer.render(scene, camera)
     if (onPostRender) onPostRender(renderer.domElement)
   }
+  const fallbackDuration = 12_000 // ms, ensure we don't hang recording
+  viewerFinishTimer = setTimeout(markViewerFinished, fallbackDuration)
   animate()
 
 
@@ -1627,6 +1775,10 @@ const createViewerScene = (mountEl, options) => {
 
   return () => {
     disposed = true
+    if (viewerFinishTimer) {
+      clearTimeout(viewerFinishTimer)
+      viewerFinishTimer = null
+    }
     window.removeEventListener('resize', handleResize)
     cancelAnimationFrame(animationId)
     if (mountEl && renderer.domElement?.parentNode === mountEl) {
@@ -1658,6 +1810,31 @@ const createViewerScene = (mountEl, options) => {
   position: fixed;
   inset: 0;
   background: #000;
+}
+.recording-overlay {
+  position: fixed;
+  inset: 0;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 12;
+}
+.recording-overlay__text {
+  color: #000;
+  font-size: 38rpx;
+  letter-spacing: 2rpx;
+}
+.overlay-toggle {
+  position: fixed;
+  right: 20rpx;
+  top: 20rpx;
+  z-index: 13;
+  padding: 10rpx 18rpx;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  border-radius: 12rpx;
+  font-size: 26rpx;
 }
 .canvas-container {
   width: 100%;

@@ -2831,6 +2831,26 @@ const loadMarbleTemplate = (glbPath) => {
   })
 }
 
+const prefetchingGlbPaths = new Set()
+const prefetchMarbleTemplates = async (products) => {
+  const list = Array.isArray(products) ? products : []
+  if (!list.length) return
+  await Promise.allSettled(
+    list.map(async (item) => {
+      const glb = item?.glb
+      if (!glb || marbleTemplateCache.has(glb) || prefetchingGlbPaths.has(glb)) return
+      prefetchingGlbPaths.add(glb)
+      try {
+        await loadMarbleTemplate(glb)
+      } catch (error) {
+        console.warn('预加载珠子模型失败', glb, error)
+      } finally {
+        prefetchingGlbPaths.delete(glb)
+      }
+    })
+  )
+}
+
 const reflowMarbles = () => {
   if (!scene || !marbleInstances.length) return
   const radius = getBraceletRadius()
@@ -2970,6 +2990,14 @@ watch(
       return
     }
     selectedProductIndex.value = clampIndex(selectedProductIndex.value, list.length)
+  },
+  { immediate: true }
+)
+
+watch(
+  rawProductList,
+  (list) => {
+    prefetchMarbleTemplates(list)
   },
   { immediate: true }
 )
