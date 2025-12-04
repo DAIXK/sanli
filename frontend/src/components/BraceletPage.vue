@@ -85,6 +85,12 @@
 
     <view class="product-carousel" v-if="visibleProductList.length">
       <view class="carousel-header">
+        <button class="user-button" type="button" @tap="handleOpenUser">
+          <view class="undo-button-content">
+            <text class="undo-icon">👤</text>
+            <text class="undo-label">我的</text>
+          </view>
+        </button>
         <button
           class="undo-button"
           type="button"
@@ -405,6 +411,16 @@ const canAddMoreMarbles = computed(() => marbleCount.value < activeBraceletMaxBe
 const CANVAS_ID = 'modelCanvas'
 const videoGenerating = ref(false)
 const uploadedSnapshotUrl = ref('')
+const buildBeadSummary = () => {
+  const summary = new Map()
+  marbleInstances.forEach((marble) => {
+    const product = marble?.userData?.product || {}
+    const key = product.id || product.glb || product.name || Math.random().toString(36)
+    const prev = summary.get(key) || { count: 0, name: product.name || '', id: product.id || '', width: product.width || '', type: product.type || '' }
+    summary.set(key, { ...prev, count: prev.count + 1 })
+  })
+  return Array.from(summary.values())
+}
 
 const parseWidthToDiameter = (width) => {
   if (typeof width === 'number') {
@@ -675,6 +691,29 @@ const openBeadGuideDrawer = () => {
 }
 const closeBeadGuideDrawer = () => {
   beadGuideDrawerVisible.value = false
+}
+const handleOpenUser = () => {
+  const target = '/pages/user/index'
+  const bridge = getMiniProgramBridge()
+  if (bridge && typeof bridge.navigateTo === 'function') {
+    try {
+      bridge.navigateTo({ url: target })
+      return
+    } catch (error) {
+      console.warn('navigateTo mini program user page failed', error)
+    }
+  }
+  if (typeof uni !== 'undefined' && typeof uni.navigateTo === 'function') {
+    uni.navigateTo({ url: target })
+    return
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      window.location.href = target
+    } catch (error) {
+      console.warn('fallback navigation to user page failed', error)
+    }
+  }
 }
 const animationRecording = ref(false)
 const animationModalVisible = ref(false)
@@ -1022,20 +1061,22 @@ const handleGenerateVideo = async () => {
     if (!cached) {
       throw new Error('无法缓存模型')
     }
-  const detailPayload = {
-    price: price.value,
-    formattedPrice: formattedPrice.value,
-    ringSize: formattedRingLength.value,
-    beadSize: beadSizeLabels.value[selectedBeadSizeIndex.value] || '',
-    braceletId: activeBracelet.value?.id || '',
-    braceletName: activeBraceletName.value,
-    productName: activeProduct.value?.name || '',
-    productId: activeProduct.value?.id || '',
-    productImage: snapshotUrl || uploadedSnapshotUrl.value || activeProduct.value?.png || '',
-    selectedProductIndex: selectedProductIndex.value,
-    marbleCount: marbleCount.value,
-    snapshotUrl: snapshotUrl || uploadedSnapshotUrl.value || ''
-  }
+    const beadSummary = buildBeadSummary()
+    const detailPayload = {
+      price: price.value,
+      formattedPrice: formattedPrice.value,
+      ringSize: formattedRingLength.value,
+      beadSize: beadSizeLabels.value[selectedBeadSizeIndex.value] || '',
+      braceletId: activeBracelet.value?.id || '',
+      braceletName: activeBraceletName.value,
+      productName: activeBraceletName.value || '',
+      productId: activeProduct.value?.id || '',
+      productImage: snapshotUrl || uploadedSnapshotUrl.value || activeProduct.value?.png || '',
+      selectedProductIndex: selectedProductIndex.value,
+      marbleCount: marbleCount.value,
+      snapshotUrl: snapshotUrl || uploadedSnapshotUrl.value || '',
+      beadSummary: JSON.stringify(beadSummary)
+    }
     if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
       // uni.showToast({
       //   title: '生成中，请稍候',
@@ -3526,7 +3567,7 @@ const handleAddMarble = async () => {
   justify-content: center;
   padding: 16rpx 32rpx;
   min-height: 80rpx;
-  margin-left: auto;
+  margin: 0;
 }
 
 .undo-button:disabled,
@@ -3563,11 +3604,7 @@ const handleAddMarble = async () => {
   border-color: rgba(148, 163, 184, 0.6);
 }
 
-.undo-button-content {
-  display: flex;
-  align-items: center;
-  gap: 6rpx;
-}
+
 
 .undo-label {
   font-size: 22rpx;
@@ -3586,6 +3623,24 @@ const handleAddMarble = async () => {
   font-weight: 600;
 }
 
+.user-button {
+  border: 2rpx solid rgba(15, 23, 42, 0.12);
+  outline: none;
+  border-radius: 25rpx;
+  background: linear-gradient(140deg, #ffffff 10%, #f3f4f6 100%);
+  box-shadow: 0 8rpx 20rpx rgba(15, 23, 42, 0.08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16rpx 28rpx;
+  min-height: 80rpx;
+  margin: 0;
+}
+.user-button .undo-label {
+  color: #111827;
+  font-weight: 600;
+}
+
 .product-carousel {
   background: #fff;
   border-radius: 32rpx;
@@ -3598,7 +3653,10 @@ const handleAddMarble = async () => {
 
 .carousel-header {
   width: 100%;
-  text-align: right;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
 }
 
 .carousel-title {
@@ -3625,6 +3683,16 @@ const handleAddMarble = async () => {
 
 .product-item.active {
   transform: translateY(-2rpx);
+}
+
+.product-item:nth-child(4n + 1) {
+  justify-self: start;
+  padding-left: 0;
+}
+
+.product-item:nth-child(4n) {
+  justify-self: end;
+  padding-right: 0;
 }
 
 .product-thumb {

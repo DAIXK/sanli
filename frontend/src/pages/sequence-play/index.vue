@@ -292,6 +292,7 @@ const buildQueryString = (params = {}) => {
 
 const sendVideoUrlToMiniProgram = (url) => {
   if (!url) return false
+  const beadSummaryString = JSON.stringify(sequenceConfig.value?.beadSummary || [])
   const extras = {
     ringSize: sequenceConfig.value?.ringSize,
     braceletId: sequenceConfig.value?.braceletId,
@@ -304,6 +305,7 @@ const sendVideoUrlToMiniProgram = (url) => {
     formattedPrice: sequenceConfig.value?.formattedPrice,
     selectedProductIndex: sequenceConfig.value?.selectedProductIndex,
     marbleCount: sequenceConfig.value?.marbleCount,
+    beadSummary: beadSummaryString,
     snapshotUrl: uploadedSnapshotUrl.value
   }
   const payload = {
@@ -895,6 +897,18 @@ const prepareSequenceConfig = () => {
   const selectedProductIndex = parseNumber(params.get('selectedProductIndex'), null)
   const marbleCount = parseNumber(params.get('marbleCount'), null)
   const snapshotUrl = decodeOrRaw(params.get('snapshotUrl'))
+  let beadSummary = []
+  const beadSummaryRaw = decodeOrRaw(params.get('beadSummary'))
+  if (beadSummaryRaw) {
+    try {
+      const parsed = JSON.parse(beadSummaryRaw)
+      if (Array.isArray(parsed)) {
+        beadSummary = parsed
+      }
+    } catch (error) {
+      console.warn('解析 beadSummary 失败', error)
+    }
+  }
 
   sequenceConfig.value = {
     assemblyDiy: assemblySource,
@@ -922,7 +936,8 @@ const prepareSequenceConfig = () => {
     formattedPrice,
     selectedProductIndex,
     marbleCount,
-    snapshotUrl
+    snapshotUrl,
+    beadSummary
   }
   if (snapshotUrl) {
     uploadedSnapshotUrl.value = snapshotUrl
