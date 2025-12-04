@@ -13,13 +13,6 @@
         "navigationStyle": "custom",
         "navigationBarTitleText": "视频生成中..."
       }
-    },
-    {
-      "path": "pages/video-result/index",
-      "style": {
-        "navigationStyle": "custom",
-        "navigationBarTitleText": "Video Result"
-      }
     }
   ],
   "globalStyle": {
