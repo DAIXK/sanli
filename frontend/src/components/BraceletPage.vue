@@ -201,7 +201,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
-import { requestJson } from '../utils/api'
+import { requestJson, buildApiUrl } from '../utils/api'
 //可按 “radial/tangent/normal” 三种轴向做世界坐标旋转
 
 const props = defineProps({
@@ -404,6 +404,7 @@ const activeBraceletMaxBeads = computed(() => {
 const canAddMoreMarbles = computed(() => marbleCount.value < activeBraceletMaxBeads.value)
 const CANVAS_ID = 'modelCanvas'
 const videoGenerating = ref(false)
+const uploadedSnapshotUrl = ref('')
 
 const parseWidthToDiameter = (width) => {
   if (typeof width === 'number') {
@@ -1014,24 +1015,27 @@ const handleGenerateVideo = async () => {
   }
   videoGenerating.value = true
   try {
+    const snapshotUrl = await uploadSnapshotImage()
     const blob = await exportBraceletModel()
     const fileName = buildExportFileName()
     const cached = await cacheBraceletModel(blob, fileName)
     if (!cached) {
       throw new Error('无法缓存模型')
     }
-    const detailPayload = {
-      price: price.value,
-      formattedPrice: formattedPrice.value,
-      ringSize: formattedRingLength.value,
-      beadSize: beadSizeLabels.value[selectedBeadSizeIndex.value] || '',
-      braceletId: activeBracelet.value?.id || '',
-      braceletName: activeBraceletName.value,
-      productName: activeProduct.value?.name || '',
-      productId: activeProduct.value?.id || '',
-      selectedProductIndex: selectedProductIndex.value,
-      marbleCount: marbleCount.value
-    }
+  const detailPayload = {
+    price: price.value,
+    formattedPrice: formattedPrice.value,
+    ringSize: formattedRingLength.value,
+    beadSize: beadSizeLabels.value[selectedBeadSizeIndex.value] || '',
+    braceletId: activeBracelet.value?.id || '',
+    braceletName: activeBraceletName.value,
+    productName: activeProduct.value?.name || '',
+    productId: activeProduct.value?.id || '',
+    productImage: activeProduct.value?.png || '',
+    selectedProductIndex: selectedProductIndex.value,
+    marbleCount: marbleCount.value,
+    snapshotUrl: snapshotUrl || uploadedSnapshotUrl.value || ''
+  }
     if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
       // uni.showToast({
       //   title: '生成中，请稍候',
@@ -1062,6 +1066,111 @@ const sanitizeFileName = (text) => {
 const buildExportFileName = () => {
   const baseName = sanitizeFileName(activeBraceletName.value || 'bracelet')
   return `${baseName}-diy-${Date.now()}.glb`
+}
+
+const SNAPSHOT_SIZE = 1024
+const captureSnapshotBlob = () =>
+  new Promise((resolve, reject) => {
+    if (!canvasElement || typeof canvasElement.toBlob !== 'function' || !renderer || !camera) {
+      reject(new Error('画布未就绪，无法截图'))
+      return
+    }
+    const saved = {
+      cameraPosition: camera.position.clone(),
+      cameraQuaternion: camera.quaternion.clone(),
+      controlsTarget: controls?.target?.clone?.(),
+      aspect: camera.aspect,
+      rendererSize: renderer.getSize(new THREE.Vector2()),
+      pixelRatio: renderer.getPixelRatio()
+    }
+    try {
+      const box = ringRoot ? new THREE.Box3().setFromObject(ringRoot) : null
+      const center = box ? box.getCenter(new THREE.Vector3()) : new THREE.Vector3(0, 0, 0)
+      const size = box ? box.getSize(new THREE.Vector3()) : new THREE.Vector3(0.6, 0.6, 0.6)
+      const maxDim = Math.max(size.x, size.y, size.z) || 0.6
+      camera.aspect = 1
+      camera.updateProjectionMatrix()
+      const fov = (camera.fov * Math.PI) / 180
+      const distance = (maxDim / (2 * Math.tan(fov / 2))) * 1.4
+      camera.position.set(center.x, center.y, center.z + distance)
+      camera.lookAt(center)
+      if (controls) {
+        controls.target.copy(center)
+        controls.update()
+      }
+      renderer.setPixelRatio(1)
+      renderer.setSize(SNAPSHOT_SIZE, SNAPSHOT_SIZE, false)
+      renderer.render(scene, camera)
+    } catch (error) {
+      console.warn('截图前准备失败', error)
+    }
+
+    canvasElement.toBlob(
+      (blob) => {
+        try {
+          camera.aspect = saved.aspect
+          camera.updateProjectionMatrix()
+          if (saved.cameraPosition && saved.cameraQuaternion) {
+            camera.position.copy(saved.cameraPosition)
+            camera.quaternion.copy(saved.cameraQuaternion)
+          }
+          if (controls && saved.controlsTarget) {
+            controls.target.copy(saved.controlsTarget)
+            controls.update()
+          }
+          if (saved.rendererSize) {
+            renderer.setSize(saved.rendererSize.x, saved.rendererSize.y, false)
+          }
+          if (Number.isFinite(saved.pixelRatio)) {
+            renderer.setPixelRatio(saved.pixelRatio)
+          }
+          renderer.render(scene, camera)
+        } catch (error) {
+          console.warn('截图后恢复视角失败', error)
+        }
+        if (blob) resolve(blob)
+        else reject(new Error('生成截图失败'))
+      },
+      'image/jpeg',
+      0.92
+    )
+  })
+
+const uploadSnapshotImage = async () => {
+  try {
+    const blob = await captureSnapshotBlob()
+    const file = new File([blob], `bracelet-snapshot-${Date.now()}.jpg`, { type: 'image/jpeg' })
+    const formData = new FormData()
+    formData.append('file', file)
+    const endpoint = buildApiUrl('/api/mobile/upload')
+    const response = await fetch(endpoint, { method: 'POST', body: formData })
+    if (!response.ok) {
+      const txt = await response.text().catch(() => '')
+      throw new Error(`截图上传失败 ${response.status} ${txt}`)
+    }
+    const contentType = response.headers?.get?.('content-type') || ''
+    let result = null
+    if (contentType.includes('application/json')) {
+      result = await response.json().catch(() => null)
+    } else {
+      const text = await response.text()
+      try {
+        result = text ? JSON.parse(text) : null
+      } catch {
+        result = { url: text }
+      }
+    }
+    const imageUrl =
+      result?.url || result?.data?.url || result?.imageUrl || result?.image_url || null
+    if (imageUrl) {
+      uploadedSnapshotUrl.value = imageUrl
+      console.log('Snapshot image url', imageUrl)
+    }
+    return imageUrl
+  } catch (error) {
+    console.warn('生成/上传截图失败', error)
+    return null
+  }
 }
 
 const resolveSequencePlayTarget = () => {

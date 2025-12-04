@@ -4,7 +4,7 @@
       v-if="recordingOverlayEnabled && recordingOverlayVisible"
       class="recording-overlay"
     >
-      <text class="recording-overlay__text">生成中…</text>
+      <view class="spinner"></view>
     </view>
     <!-- <view class="overlay-toggle" @tap="toggleRecordingOverlay">
       {{ recordingOverlayEnabled ? '遮罩开' : '遮罩关' }}
@@ -188,6 +188,7 @@ const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000 // 7 days
 const uploadState = ref('idle') // idle | uploading | success | error
 const uploadError = ref('')
 const uploadedVideoUrl = ref('')
+const uploadedSnapshotUrl = ref('')
 const autoRecordEnabled = ref(true)
 const recordingOverlayEnabled = ref(true)
 const recordingOverlayVisible = ref(false)
@@ -203,6 +204,79 @@ const toggleRecordingOverlay = () => {
 const notify = (title, icon = 'none') => {
   if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
     uni.showToast({ title, icon })
+  }
+}
+
+const getSnapshotBlob = () =>
+  new Promise((resolve, reject) => {
+    if (!recordingCanvas) {
+      reject(new Error('暂无可用的截图画布'))
+      return
+    }
+    const exportCanvas = document.createElement('canvas')
+    exportCanvas.width = recordingCanvas.width
+    exportCanvas.height = recordingCanvas.height
+    const ctx = exportCanvas.getContext('2d')
+    if (!ctx) {
+      reject(new Error('无法获取导出画布上下文'))
+      return
+    }
+    // 白底
+    ctx.fillStyle = '#fff'
+    ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height)
+    ctx.drawImage(recordingCanvas, 0, 0, exportCanvas.width, exportCanvas.height)
+    exportCanvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob)
+        } else {
+          reject(new Error('生成截图失败'))
+        }
+      },
+      'image/jpeg',
+      0.92
+    )
+  })
+
+const uploadSnapshotImage = async () => {
+  try {
+    const blob = await getSnapshotBlob()
+    const file = new File([blob], `bracelet-snapshot-${Date.now()}.jpg`, {
+      type: 'image/jpeg'
+    })
+    const formData = new FormData()
+    formData.append('file', file)
+    const endpoint = buildApiUrl('/api/mobile/upload')
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      body: formData
+    })
+    if (!response.ok) {
+      const txt = await response.text().catch(() => '')
+      throw new Error(`图片上传失败 ${response.status} ${txt}`)
+    }
+    const contentType = response.headers?.get?.('content-type') || ''
+    let result = null
+    if (contentType.includes('application/json')) {
+      result = await response.json().catch(() => null)
+    } else {
+      const text = await response.text()
+      try {
+        result = text ? JSON.parse(text) : null
+      } catch {
+        result = { url: text }
+      }
+    }
+    const imageUrl =
+      result?.url || result?.data?.url || result?.imageUrl || result?.image_url || null
+    if (imageUrl) {
+      uploadedSnapshotUrl.value = imageUrl
+      console.log('Recorder: snapshot image url', imageUrl)
+    }
+    return imageUrl
+  } catch (error) {
+    console.warn('截图上传失败', error)
+    return null
   }
 }
 
@@ -228,7 +302,8 @@ const sendVideoUrlToMiniProgram = (url) => {
     price: sequenceConfig.value?.price,
     formattedPrice: sequenceConfig.value?.formattedPrice,
     selectedProductIndex: sequenceConfig.value?.selectedProductIndex,
-    marbleCount: sequenceConfig.value?.marbleCount
+    marbleCount: sequenceConfig.value?.marbleCount,
+    snapshotUrl: uploadedSnapshotUrl.value
   }
   const payload = {
     action: 'navigateToVideo',
@@ -302,6 +377,7 @@ const uploadRecordedVideo = async (blob, mimeType) => {
     uploadState.value = 'success'
     if (uploadedVideoUrl.value) {
       console.log('Recorder: uploaded video url', uploadedVideoUrl.value)
+      await uploadSnapshotImage()
       sendVideoUrlToMiniProgram(uploadedVideoUrl.value)
     }
     // notify('视频上传成功', 'success')
@@ -816,6 +892,7 @@ const prepareSequenceConfig = () => {
   const formattedPrice = decodeOrRaw(params.get('formattedPrice'))
   const selectedProductIndex = parseNumber(params.get('selectedProductIndex'), null)
   const marbleCount = parseNumber(params.get('marbleCount'), null)
+  const snapshotUrl = decodeOrRaw(params.get('snapshotUrl'))
 
   sequenceConfig.value = {
     assemblyDiy: assemblySource,
@@ -841,7 +918,11 @@ const prepareSequenceConfig = () => {
     price,
     formattedPrice,
     selectedProductIndex,
-    marbleCount
+    marbleCount,
+    snapshotUrl
+  }
+  if (snapshotUrl) {
+    uploadedSnapshotUrl.value = snapshotUrl
   }
 
   if (!sequenceConfig.value.assemblyDiy && !useCachedAssembly) {
@@ -1902,10 +1983,21 @@ const createViewerScene = (mountEl, options) => {
   justify-content: center;
   z-index: 12;
 }
-.recording-overlay__text {
-  color: #000;
-  font-size: 38rpx;
-  letter-spacing: 2rpx;
+.spinner {
+  width: 72rpx;
+  height: 72rpx;
+  border: 8rpx solid rgba(0, 0, 0, 0.08);
+  border-top-color: rgba(0, 0, 0, 0.7);
+  border-radius: 50%;
+  animation: spinner-rotate 1s linear infinite;
+}
+@keyframes spinner-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 .overlay-toggle {
   position: fixed;
