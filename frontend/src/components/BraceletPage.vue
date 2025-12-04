@@ -1033,10 +1033,10 @@ const handleGenerateVideo = async () => {
       marbleCount: marbleCount.value
     }
     if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
-      uni.showToast({
-        title: '生成中，请稍候',
-        icon: 'none'
-      })
+      // uni.showToast({
+      //   title: '生成中，请稍候',
+      //   icon: 'none'
+      // })
     }
     await navigateToSequencePlay({ autoRecord: 1, overlay: 1, ...detailPayload })
   } catch (error) {

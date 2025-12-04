@@ -6,9 +6,9 @@
     >
       <text class="recording-overlay__text">生成中…</text>
     </view>
-    <view class="overlay-toggle" @tap="toggleRecordingOverlay">
+    <!-- <view class="overlay-toggle" @tap="toggleRecordingOverlay">
       {{ recordingOverlayEnabled ? '遮罩开' : '遮罩关' }}
-    </view>
+    </view> -->
     <view
       v-show="stage === 'assembly'"
       class="canvas-container"
@@ -25,14 +25,7 @@
     <!-- <view class="toast" v-if="loadingText">{{ loadingText }}</view> -->
     <view class="error" v-if="errorText">{{ errorText }}</view>
     
-    <!-- Download Button -->
-    <view 
-      class="download-btn" 
-      v-if="showDownloadBtn" 
-      @click="downloadVideo"
-    >
-      下载视频
-    </view>
+  
     
     <!-- Left Debug Panel (Model & Camera) -->
     <view class="debug-panel" v-if="stage === 'viewer' && debugParams.showPanel">
@@ -311,7 +304,7 @@ const uploadRecordedVideo = async (blob, mimeType) => {
       console.log('Recorder: uploaded video url', uploadedVideoUrl.value)
       sendVideoUrlToMiniProgram(uploadedVideoUrl.value)
     }
-    notify('视频上传成功', 'success')
+    // notify('视频上传成功', 'success')
     return result
   } catch (error) {
     uploadState.value = 'error'
@@ -448,8 +441,6 @@ const finalizeRecording = async (blob, mimeType) => {
     await uploadRecordedVideo(blob, mimeType)
   } catch (error) {
     console.warn('Recorder: upload failed', error)
-  } finally {
-    recordingOverlayVisible.value = false
   }
 }
 
@@ -580,7 +571,6 @@ const stopRecording = () => {
       finalizeRecording(lastRecordedBlob.value, lastRecordedBlob.value.type || 'video/webm')
     }
   }
-  recordingOverlayVisible.value = false
 }
 
 const downloadVideo = () => {
