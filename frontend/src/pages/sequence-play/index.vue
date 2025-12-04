@@ -298,6 +298,7 @@ const sendVideoUrlToMiniProgram = (url) => {
     braceletName: sequenceConfig.value?.braceletName,
     productId: sequenceConfig.value?.productId,
     productName: sequenceConfig.value?.productName,
+    productImage: sequenceConfig.value?.productImage,
     beadSize: sequenceConfig.value?.beadSize,
     price: sequenceConfig.value?.price,
     formattedPrice: sequenceConfig.value?.formattedPrice,
@@ -886,6 +887,7 @@ const prepareSequenceConfig = () => {
   const braceletName = decodeOrRaw(params.get('braceletName'))
   const productId = decodeOrRaw(params.get('productId'))
   const productName = decodeOrRaw(params.get('productName'))
+  const productImage = decodeOrRaw(params.get('productImage'))
   const ringSize = decodeOrRaw(params.get('ringSize'))
   const beadSize = decodeOrRaw(params.get('beadSize'))
   const price = decodeOrRaw(params.get('price'))
@@ -913,6 +915,7 @@ const prepareSequenceConfig = () => {
     braceletName,
     productId,
     productName,
+    productImage,
     ringSize,
     beadSize,
     price,

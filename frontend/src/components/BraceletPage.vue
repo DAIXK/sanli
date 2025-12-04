@@ -1031,7 +1031,7 @@ const handleGenerateVideo = async () => {
     braceletName: activeBraceletName.value,
     productName: activeProduct.value?.name || '',
     productId: activeProduct.value?.id || '',
-    productImage: activeProduct.value?.png || '',
+    productImage: snapshotUrl || uploadedSnapshotUrl.value || activeProduct.value?.png || '',
     selectedProductIndex: selectedProductIndex.value,
     marbleCount: marbleCount.value,
     snapshotUrl: snapshotUrl || uploadedSnapshotUrl.value || ''
