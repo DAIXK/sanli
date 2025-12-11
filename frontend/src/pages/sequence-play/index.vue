@@ -495,6 +495,52 @@ const lastRecordedBlob = ref(null)
 const showDownloadBtn = ref(false)
 const downloadUrl = ref('')
 const downloadExt = ref('webm')
+let holdFrameCanvas = null
+let holdFrameUntil = 0
+let holdFrameRaf = 0
+
+const stopFrameHold = () => {
+  if (holdFrameRaf) {
+    cancelAnimationFrame(holdFrameRaf)
+    holdFrameRaf = 0
+  }
+  holdFrameCanvas = null
+  holdFrameUntil = 0
+}
+
+const pumpHoldFrame = () => {
+  if (!recordingCanvas || !holdFrameCanvas) {
+    stopFrameHold()
+    return
+  }
+  const ctx = recordingCanvas.getContext('2d')
+  if (!ctx) {
+    stopFrameHold()
+    return
+  }
+  ctx.drawImage(holdFrameCanvas, 0, 0, recordingCanvas.width, recordingCanvas.height)
+  if (Date.now() >= holdFrameUntil) {
+    stopFrameHold()
+    return
+  }
+  holdFrameRaf = requestAnimationFrame(pumpHoldFrame)
+}
+
+const startFrameHold = (duration = 1200) => {
+  if (!recordingCanvas) return
+  const cached = document.createElement('canvas')
+  cached.width = recordingCanvas.width
+  cached.height = recordingCanvas.height
+  const sourceCtx = recordingCanvas.getContext('2d')
+  const cacheCtx = cached.getContext('2d')
+  if (!sourceCtx || !cacheCtx) return
+  cacheCtx.drawImage(recordingCanvas, 0, 0)
+  holdFrameCanvas = cached
+  holdFrameUntil = Date.now() + duration
+  if (!holdFrameRaf) {
+    holdFrameRaf = requestAnimationFrame(pumpHoldFrame)
+  }
+}
 
 const finalizeRecording = async (blob, mimeType) => {
   if (!(blob instanceof Blob)) return
@@ -545,6 +591,7 @@ const forceStopRecording = () => {
 }
 
 const startRecording = () => {
+  stopFrameHold()
   recordedChunks.value = []
   downloadUrl.value = ''
   uploadedVideoUrl.value = ''
@@ -641,6 +688,7 @@ const startRecording = () => {
 const stopRecording = () => {
   console.log('Recorder: stop requested')
   clearRecordingTimeout()
+  stopFrameHold()
   if (mediaRecorder.value && mediaRecorder.value.state !== 'inactive') {
     mediaRecorder.value.stop()
   } else {
@@ -667,8 +715,12 @@ const handlePostRender = (sourceCanvas) => {
   const target = recordingCanvas
   if (!target || !sourceCanvas) return
   const ctx = target.getContext('2d')
+  if (!ctx) return
   // Draw the current frame from the WebGL canvas to the recording canvas
   ctx.drawImage(sourceCanvas, 0, 0, target.width, target.height)
+  if (holdFrameCanvas) {
+    stopFrameHold()
+  }
 }
 
 const decodeOrRaw = (value) => {
@@ -1036,6 +1088,7 @@ const runViewerStage = async () => {
     diyUrl: viewerUrl,
     baseModelUrl: config.viewerBase || DEFAULT_BASE_MODEL,
     backgroundUrl: config.viewerBg || DEFAULT_BG,
+    onReady: stopFrameHold,
     onProgress: (progress) => {
       const percent = Math.min(100, Math.max(0, Math.round(progress * 100)))
       loadingText.value = `加载中 ${percent}%`
@@ -1068,6 +1121,7 @@ const stopViewerStage = () => {
 }
 
 const transitionToViewerStage = () => {
+  startFrameHold(1800)
   stopAssemblyStage()
   stage.value = 'viewer'
 }
@@ -1101,6 +1155,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopAssemblyStage()
   stopViewerStage()
+  stopFrameHold()
   cachedObjectUrls.forEach((url) => {
     URL.revokeObjectURL(url)
   })
@@ -1544,13 +1599,31 @@ const createAssemblyScene = (mountEl, options) => {
 }
 
 const createViewerScene = (mountEl, options) => {
-  const { diyUrl, baseModelUrl, backgroundUrl, onProgress, onError, onPostRender, onFinished } = options
+  const {
+    diyUrl,
+    baseModelUrl,
+    backgroundUrl,
+    onProgress,
+    onError,
+    onPostRender,
+    onFinished,
+    onReady
+  } = options
   let disposed = false
   let animationId = 0
   let viewerFinished = false
   let viewerFinishTimer = null
+  let readySignaled = false
   const scene = new THREE.Scene()
   const cleanupBackground = setupSceneBackground(scene, backgroundUrl || DEFAULT_BG, 0x000000)
+
+  const signalReady = () => {
+    if (readySignaled) return
+    readySignaled = true
+    if (typeof onReady === 'function') {
+      onReady()
+    }
+  }
 
   const getSize = () => ({
     width: mountEl.clientWidth || mountEl.offsetWidth || 1,
@@ -1880,6 +1953,7 @@ const createViewerScene = (mountEl, options) => {
         onError('未找到 DIY 模型')
       }
 
+      signalReady()
       if (onProgress) onProgress(1)
     },
     (xhr) => {
@@ -1889,6 +1963,7 @@ const createViewerScene = (mountEl, options) => {
     },
     (error) => {
       console.error('An error happened during loading:', error)
+      signalReady()
       if (!disposed && onError) onError('基础模型加载失败')
     }
   )
