@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev:h5": "uni dev:h5",
-    "dev:mp-weixin": "uni dev:mp-weixin",
-    "build:h5": "uni build:h5",
-    "build:mp-weixin": "uni build:mp-weixin"
+    "dev:h5": "uni dev -p h5",
+    "dev:mp-weixin": "uni dev -p mp-weixin",
+    "build:h5": "uni build -p h5",
+    "build:mp-weixin": "uni build -p mp-weixin"
   },
   "dependencies": {
     "@dcloudio/uni-app": "npm:@dcloudio/uni-app@vue3",
