@@ -1763,7 +1763,7 @@ const createViewerScene = (mountEl, options) => {
           }
 
           if (child.material.map) {
-            child.material.map.encoding = THREE.sRGBEncoding
+            child.material.map.colorSpace = THREE.SRGBColorSpace
           }
           child.material.needsUpdate = true
         }
