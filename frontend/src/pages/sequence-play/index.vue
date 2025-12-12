@@ -5,6 +5,7 @@
       class="recording-overlay"
     >
       <view class="spinner"></view>
+      <view class="overlay-title">{{ overlayTitle }}</view>
     </view>
     <!-- <view class="overlay-toggle" @tap="toggleRecordingOverlay">
       {{ recordingOverlayEnabled ? '遮罩开' : '遮罩关' }}
@@ -190,6 +191,7 @@ const uploadError = ref('')
 const uploadedVideoUrl = ref('')
 const uploadedSnapshotUrl = ref('')
 const autoRecordEnabled = ref(true)
+const snapshotOnlyMode = ref(false)
 const recordingOverlayEnabled = ref(true)
 const recordingOverlayVisible = ref(false)
 const toggleRecordingOverlay = () => {
@@ -290,8 +292,10 @@ const buildQueryString = (params = {}) => {
   return str ? `?${str}` : ''
 }
 
-const sendVideoUrlToMiniProgram = (url) => {
-  if (!url) return false
+const sendVideoUrlToMiniProgram = (url, options = {}) => {
+  const { allowEmpty = false, snapshotUrl } = options
+  const finalUrl = url || ''
+  if (!finalUrl && !allowEmpty) return false
   const beadSummaryString = JSON.stringify(sequenceConfig.value?.beadSummary || [])
   const extras = {
     ringSize: sequenceConfig.value?.ringSize,
@@ -306,15 +310,15 @@ const sendVideoUrlToMiniProgram = (url) => {
     selectedProductIndex: sequenceConfig.value?.selectedProductIndex,
     marbleCount: sequenceConfig.value?.marbleCount,
     beadSummary: beadSummaryString,
-    snapshotUrl: uploadedSnapshotUrl.value
+    snapshotUrl: snapshotUrl ?? uploadedSnapshotUrl.value
   }
   const payload = {
     action: 'navigateToVideo',
-    url,
-    videoUrl: url,
+    url: finalUrl,
+    videoUrl: finalUrl,
     ...extras
   }
-  const query = buildQueryString({ videoUrl: url, ...extras })
+  const query = buildQueryString({ videoUrl: finalUrl, ...extras })
   let delivered = false
   try {
     const bridge = window?.wx?.miniProgram
@@ -322,7 +326,7 @@ const sendVideoUrlToMiniProgram = (url) => {
       if (typeof bridge.postMessage === 'function') {
         bridge.postMessage({ data: payload })
         delivered = true
-        console.log('Recorder: postMessage video url to mini program', url)
+        console.log('Recorder: postMessage video url to mini program', finalUrl)
       }
       if (typeof bridge.navigateTo === 'function') {
         const target = `/pages/video/index${query}`
@@ -333,6 +337,20 @@ const sendVideoUrlToMiniProgram = (url) => {
     }
   } catch (error) {
     console.warn('Mini program communication failed', error)
+  }
+  return delivered
+}
+
+const sendSnapshotToMiniProgram = () => {
+  const snapshot = uploadedSnapshotUrl.value || sequenceConfig.value?.snapshotUrl || ''
+  if (!snapshot) {
+    errorText.value = '未找到截图，无法发送至小程序'
+    console.warn('Snapshot URL missing, cannot notify mini program')
+    return false
+  }
+  const delivered = sendVideoUrlToMiniProgram('', { allowEmpty: true, snapshotUrl: snapshot })
+  if (!delivered) {
+    errorText.value = '发送到小程序失败，请重试'
   }
   return delivered
 }
@@ -459,6 +477,7 @@ const pageStyle = computed(() => {
     backgroundPosition: 'center'
   }
 })
+const overlayTitle = computed(() => (snapshotOnlyMode.value ? '生成图片中' : '生成视频中'))
 
 const cachedDiyPayloadRef = ref(null)
 const cachedObjectUrls = new Set()
@@ -931,6 +950,7 @@ const prepareSequenceConfig = () => {
   recordingOverlayEnabled.value =
     overlayParam === '' || overlayParam === '1' || overlayParam === 'true'
   autoRecordEnabled.value = autoRecordParam === '' || autoRecordParam === '1' || autoRecordParam === 'true'
+  snapshotOnlyMode.value = !autoRecordEnabled.value
 
   const assemblySource = assemblyModel || diy || ''
   const viewerSource = viewerModel || diy || ''
@@ -1098,7 +1118,11 @@ const runViewerStage = async () => {
     },
     onPostRender: handlePostRender,
     onFinished: () => {
-      stopRecording()
+      if (autoRecordEnabled.value) {
+        stopRecording()
+      } else {
+        sendSnapshotToMiniProgram()
+      }
     }
   })
   viewerInitialized.value = true
@@ -1127,6 +1151,7 @@ const transitionToViewerStage = () => {
 }
 
 const startStage = (value) => {
+  if (snapshotOnlyMode.value) return
   if (value === 'assembly') {
     nextTick(runAssemblyStage)
   } else {
@@ -1135,6 +1160,7 @@ const startStage = (value) => {
 }
 
 watch(stage, (value, prev) => {
+  if (snapshotOnlyMode.value) return
   if (prev === 'assembly' && value !== 'assembly') {
     stopAssemblyStage()
   }
@@ -1146,6 +1172,14 @@ watch(stage, (value, prev) => {
 
 onMounted(() => {
   prepareSequenceConfig()
+  if (snapshotOnlyMode.value) {
+    recordingOverlayVisible.value = recordingOverlayEnabled.value
+    const delivered = sendSnapshotToMiniProgram()
+    if (!delivered) {
+      recordingOverlayVisible.value = false
+    }
+    return
+  }
   if (autoRecordEnabled.value) {
     startRecording() // Start recording immediately
   }
@@ -2075,6 +2109,7 @@ const createViewerScene = (mountEl, options) => {
   align-items: center;
   justify-content: center;
   z-index: 12;
+  flex-direction: column;
 }
 .spinner {
   width: 72rpx;
@@ -2091,6 +2126,12 @@ const createViewerScene = (mountEl, options) => {
   to {
     transform: rotate(360deg);
   }
+}
+.overlay-title {
+  margin-top: 16rpx;
+  font-size: 30rpx;
+  color: #000;
+  letter-spacing: 1rpx;
 }
 .overlay-toggle {
   position: fixed;
