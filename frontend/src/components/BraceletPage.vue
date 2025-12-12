@@ -20,13 +20,21 @@
         <text class="price-subtitle" v-if="priceSubtitleText">{{ priceSubtitleText }}</text>
       </view>
       <view class="toolbar-actions">
-      <button
+      <!-- <button
         class="ghost-button"
         :class="{ 'is-disabled': !canGenerateVideo || videoGenerating }"
         :disabled="!canGenerateVideo || videoGenerating"
         @tap="handleGenerateVideo"
       >
         {{ videoGenerating ? '生成中…' : '生成视频' }}
+      </button> -->
+      <button
+        class="ghost-button"
+        :class="{ 'is-disabled': !canGenerateVideo || videoGenerating }"
+        :disabled="!canGenerateVideo || videoGenerating"
+        @tap="handleGenerateImage"
+      >
+        {{ videoGenerating ? '生成中…' : '生成图片' }}
       </button>
       <!-- <button
         class="ghost-button ghost-button--secondary"
@@ -1086,6 +1094,56 @@ const handleGenerateVideo = async () => {
     await navigateToSequencePlay({ autoRecord: 1, overlay: 1, ...detailPayload })
   } catch (error) {
     console.error('生成视频失败', error)
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '生成失败，请重试',
+        icon: 'none'
+      })
+    }
+  } finally {
+    videoGenerating.value = false
+  }
+}
+const handleGenerateImage = async () => {
+  if (videoGenerating.value) return
+  if (!canGenerateVideo.value) {
+    if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+      uni.showToast({
+        title: '请先添加珠子',
+        icon: 'none'
+      })
+    }
+    return
+  }
+  videoGenerating.value = true
+  try {
+    const snapshotUrl = await uploadSnapshotImage()
+    const blob = await exportBraceletModel()
+    const fileName = buildExportFileName()
+    const cached = await cacheBraceletModel(blob, fileName)
+    if (!cached) {
+      throw new Error('无法缓存模型')
+    }
+    const beadSummary = buildBeadSummary()
+    const detailPayload = {
+      price: price.value,
+      formattedPrice: formattedPrice.value,
+      ringSize: formattedRingLength.value,
+      beadSize: beadSizeLabels.value[selectedBeadSizeIndex.value] || '',
+      braceletId: activeBracelet.value?.id || '',
+      braceletName: activeBraceletName.value,
+      productName: activeBraceletName.value || '',
+      productId: activeProduct.value?.id || '',
+      productImage: snapshotUrl || uploadedSnapshotUrl.value || activeProduct.value?.png || '',
+      selectedProductIndex: selectedProductIndex.value,
+      marbleCount: marbleCount.value,
+      snapshotUrl: snapshotUrl || uploadedSnapshotUrl.value || '',
+      beadSummary: JSON.stringify(beadSummary)
+    }
+    
+    await navigateToSequencePlay({ autoRecord: 0, overlay: 1, ...detailPayload })
+  } catch (error) {
+    console.error('生成图片失败', error)
     if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
       uni.showToast({
         title: '生成失败，请重试',
