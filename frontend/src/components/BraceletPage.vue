@@ -34,7 +34,7 @@
         :disabled="!canGenerateVideo || videoGenerating"
         @tap="handleGenerateImage"
       >
-        {{ videoGenerating ? '生成中…' : '生成图片' }}
+        {{ videoGenerating ? '提交中…' : '提交订单' }}
       </button>
       <!-- <button
         class="ghost-button ghost-button--secondary"
