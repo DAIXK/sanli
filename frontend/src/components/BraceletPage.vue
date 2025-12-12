@@ -2130,7 +2130,8 @@ const fitCameraToModel = (root) => {
   const fitWidthDistance = fitHeightDistance / camera.aspect
   const distance = Math.max(fitHeightDistance, fitWidthDistance) * 1.3 || 1
 
-  const direction = new THREE.Vector3(1, 0.4, 1).normalize()
+  // Position camera straight-on instead of at an angle
+  const direction = new THREE.Vector3(0, 0, 1).normalize()
   camera.position.copy(direction).multiplyScalar(distance)
   const minNear = 0.01
   const recommendedNear = distance / 100
