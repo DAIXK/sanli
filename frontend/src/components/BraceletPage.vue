@@ -50,19 +50,26 @@
 
 
     <view class="selector-row">
-       <view class="selector-field">
-        <text class="selector-label">购买前必看</text>
-        <view class="selector-control bead-guide-trigger" @tap="openBeadGuideDrawer">
-          <view class="selector-value">点我</view>
+      <view class="selector-left">
+        <view class="selector-field">
+          <text class="selector-label">购买前必看</text>
+          <view class="selector-control bead-guide-trigger" @tap="openBeadGuideDrawer">
+            <view class="selector-value">点我</view>
+          </view>
+        </view>
+        <view class="selector-field">
+          <text class="selector-label">手围约</text>
+          <view class="selector-control selector-control-static">
+            <view class="selector-value" style="padding: 10rpx 8rpx;">{{ formattedRingLength }}</view>
+          </view>
         </view>
       </view>
-      <view class="selector-field">
-        <text class="selector-label">手围约</text>
-        <view class="selector-control selector-control-static">
-          <view class="selector-value" style="padding: 10rpx 8rpx;">{{ formattedRingLength }}</view>
+      <button class="user-button selector-user-button" type="button" @tap="handleOpenUser">
+        <view class="undo-button-content">
+          <text class="undo-icon">👤</text>
+          <text class="undo-label">我的</text>
         </view>
-      </view>
-     
+      </button>
     </view>
 
     <view class="viewer-card">
@@ -93,12 +100,6 @@
 
     <view class="product-carousel" v-if="visibleProductList.length">
       <view class="carousel-header">
-        <button class="user-button" type="button" @tap="handleOpenUser">
-          <view class="undo-button-content">
-            <text class="undo-icon">👤</text>
-            <text class="undo-label">我的</text>
-          </view>
-        </button>
         <button
           class="undo-button"
           type="button"
@@ -643,19 +644,14 @@ const viewerSwipeLock = {
   releaseTimer: null
 }
 const sleep = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms))
-const onboardingSteps = [
-  {
-    title: '长按珠子可换位置',
-    desc: '按住珠子 3 秒后可拖动到任意位置，或拖到底部删除'
-  }
-]
+const onboardingSteps = []
 const showOnboarding = ref(false)
 const onboardingStep = ref(0)
 const currentOnboardingStep = computed(() => onboardingSteps[onboardingStep.value] || null)
 const onboardingActionText = computed(() =>
   onboardingStep.value < onboardingSteps.length - 1 ? '下一步' : '我知道了'
 )
-const shouldShowOnboarding = () => true
+const shouldShowOnboarding = () => false
 const recordOnboardingSeen = () => {}
 const dismissOnboarding = () => {
   showOnboarding.value = false
@@ -3466,8 +3462,18 @@ const handleAddMarble = async () => {
 
 .selector-row {
   display: flex;
-  gap: 28rpx;
   align-items: center;
+  width: 100%;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+.selector-left {
+  display: flex;
+  align-items: center;
+  gap: 28rpx;
+}
+.selector-user-button {
+  margin-left: auto;
 }
 
 .bracelet-indicator {
@@ -3714,7 +3720,7 @@ const handleAddMarble = async () => {
   width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16rpx;
 }
 
