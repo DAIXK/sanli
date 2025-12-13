@@ -34,7 +34,7 @@
         :disabled="!canGenerateVideo || videoGenerating"
         @tap="handleGenerateImage"
       >
-        {{ videoGenerating ? '提交中…' : '提交订单' }}
+        {{ videoGenerating ? '生成中…' : '生成图片' }}
       </button>
       <!-- <button
         class="ghost-button ghost-button--secondary"
@@ -3347,30 +3347,33 @@ const handleAddMarble = async () => {
 </script>
 
 <style lang="scss" scoped>
+/* Compact layout adjustments */
 .page {
-  min-height: 100vh;
+  height: 100vh;
   box-sizing: border-box;
-  padding: 32rpx 32rpx 48rpx;
+  padding: 24rpx;
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
+  gap: 16rpx;
   background: #ffffff;
+  overflow: hidden;
 }
 
 .toolbar {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16rpx;
+  gap: 12rpx;
+  flex-shrink: 0;
 }
 
 .page-title-bar {
-  height: 88rpx;
+  height: 60rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 500;
-  font-size: 34rpx;
+  font-size: 30rpx;
   color: #111827;
 }
 
@@ -3381,34 +3384,35 @@ const handleAddMarble = async () => {
 .price-block {
   display: flex;
   flex-direction: column;
-  gap: 6rpx;
+  gap: 4rpx;
 }
 
 .price-text {
-  font-size: 48rpx;
+  font-size: 40rpx;
   font-weight: 600;
   color: #111827;
 }
 
 .price-subtitle {
-  font-size: 24rpx;
+  font-size: 22rpx;
   color: #9ca3af;
 }
 
 .bracelet-tabs {
   display: flex;
-  gap: 16rpx;
-  padding-bottom: 12rpx;
+  gap: 12rpx;
+  padding-bottom: 8rpx;
+  flex-shrink: 0;
 }
 
 .bracelet-tab {
   flex: 1;
-  padding: 16rpx 0;
+  padding: 12rpx 0;
   text-align: center;
-  border-radius: 15rpx;
+  border-radius: 12rpx;
   border: 2rpx solid rgba(99, 102, 241, 0.25);
   color: #6b7280;
-  font-size: 24rpx;
+  font-size: 22rpx;
 }
 
 .bracelet-tab.active {
@@ -3465,12 +3469,13 @@ const handleAddMarble = async () => {
   align-items: center;
   width: 100%;
   justify-content: space-between;
-  gap: 20rpx;
+  gap: 16rpx;
+  flex-shrink: 0;
 }
 .selector-left {
   display: flex;
   align-items: center;
-  gap: 28rpx;
+  gap: 20rpx;
 }
 .selector-user-button {
   margin-left: auto;
@@ -3484,24 +3489,24 @@ const handleAddMarble = async () => {
 }
 
 .bracelet-name {
-  font-size: 34rpx;
+  font-size: 30rpx;
   font-weight: 600;
   color: #111827;
 }
 
 .bracelet-hint {
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: #9ca3af;
 }
 
 .selector-field {
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 10rpx;
 }
 
 .selector-label {
-  font-size: 24rpx;
+  font-size: 22rpx;
   color: #000000;
 }
 
@@ -3512,25 +3517,25 @@ const handleAddMarble = async () => {
 }
 
 .selector-value {
-  padding: 10rpx 0rpx;
+  padding: 8rpx 0rpx;
   border: 1rpx solid #d1d5db;
-  border-radius: 12rpx;
-  font-size: 26rpx;
+  border-radius: 10rpx;
+  font-size: 24rpx;
   color: #1f2937;
-  min-width: 100rpx;
-  padding-right: 23rpx;
+  min-width: 80rpx;
+  padding-right: 20rpx;
   text-align: center;
 }
 
 .selector-control::after {
   content: '';
   position: absolute;
-  right: 18rpx;
+  right: 14rpx;
   width: 0;
   height: 0;
-  border-left: 8rpx solid transparent;
-  border-right: 8rpx solid transparent;
-  border-top: 10rpx solid #0e0f0f;
+  border-left: 6rpx solid transparent;
+  border-right: 6rpx solid transparent;
+  border-top: 8rpx solid #0e0f0f;
   pointer-events: none;
 }
 
@@ -3546,8 +3551,8 @@ const handleAddMarble = async () => {
 .viewer-card {
   position: relative;
   background: #ffffff;
-  border-radius: 32rpx;
-  padding: 24rpx;
+  border-radius: 24rpx;
+  padding: 16rpx;
   box-shadow: none;
   display: flex;
   flex-direction: column;
@@ -3555,15 +3560,17 @@ const handleAddMarble = async () => {
   justify-content: center;
 
   flex: 1;
-  min-height: 620rpx;
+  min-height: 0; 
 
 }
 
 .viewer-canvas {
   width: 100%;
-  height: 560rpx;
-  border-radius: 28rpx;
+  height: 100%;
+  flex: 1;
+  border-radius: 20rpx;
   background: #ffffff;
+  min-height: 0;
 }
 
 .viewer-canvas canvas {
@@ -3624,14 +3631,14 @@ const handleAddMarble = async () => {
 .undo-button {
   border: 2rpx solid rgba(59, 130, 246, 0.3);
   outline: none;
-  border-radius: 25rpx;
+  border-radius: 20rpx;
   background: linear-gradient(140deg, #ffffff 15%, #e8eeff 100%);
   box-shadow: 0 12rpx 24rpx rgba(15, 23, 42, 0.15);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 16rpx 32rpx;
-  min-height: 80rpx;
+  padding: 12rpx 24rpx;
+  min-height: 64rpx;
   margin: 0;
 }
 
@@ -3653,6 +3660,7 @@ const handleAddMarble = async () => {
 .undo-icon {
   font-size: 28rpx;
   font-weight: 600;
+  color: #0f172a;
 }
 
 .undo-label {
@@ -3671,34 +3679,22 @@ const handleAddMarble = async () => {
 
 
 
-.undo-label {
-  font-size: 22rpx;
-  color: #6b7280;
-  letter-spacing: 1rpx;
-}
-
 .undo-button:disabled .undo-icon,
 .undo-button.is-disabled .undo-icon {
   color: #9ca3af;
 }
 
-.undo-icon {
-  font-size: 40rpx;
-  color: #0f172a;
-  font-weight: 600;
-}
-
 .user-button {
   border: 2rpx solid rgba(15, 23, 42, 0.12);
   outline: none;
-  border-radius: 25rpx;
+  border-radius: 20rpx;
   background: linear-gradient(140deg, #ffffff 10%, #f3f4f6 100%);
   box-shadow: 0 8rpx 20rpx rgba(15, 23, 42, 0.08);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 16rpx 28rpx;
-  min-height: 80rpx;
+  padding: 12rpx 24rpx;
+  min-height: 64rpx;
   margin: 0;
 }
 .user-button .undo-label {
@@ -3708,12 +3704,13 @@ const handleAddMarble = async () => {
 
 .product-carousel {
   background: #fff;
-  border-radius: 32rpx;
-  padding: 24rpx;
+  border-radius: 24rpx;
+  padding: 16rpx;
   box-shadow: none;
   display: flex;
   flex-direction: column;
-  gap: 20rpx;
+  gap: 12rpx;
+  flex-shrink: 0;
 }
 
 .carousel-header {
@@ -3721,11 +3718,11 @@ const handleAddMarble = async () => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 16rpx;
+  gap: 12rpx;
 }
 
 .carousel-title {
-  font-size: 28rpx;
+  font-size: 26rpx;
   font-weight: 600;
   color: #111827;
 }
@@ -3733,16 +3730,16 @@ const handleAddMarble = async () => {
 .product-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18rpx;
+  gap: 10rpx;
 }
 
 .product-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10rpx;
-  padding: 10rpx;
-  border-radius: 20rpx;
+  gap: 8rpx;
+  padding: 8rpx;
+  border-radius: 16rpx;
   transition: transform 0.2s ease;
 }
 
@@ -3761,8 +3758,8 @@ const handleAddMarble = async () => {
 }
 
 .product-thumb {
-  width: 110rpx;
-  height: 110rpx;
+  width: 80rpx;
+  height: 80rpx;
   border-radius: 50%;
   overflow: hidden;
   display: flex;
@@ -3779,7 +3776,7 @@ const handleAddMarble = async () => {
 }
 
 .product-name {
-  font-size: 24rpx;
+  font-size: 20rpx;
   color: #374151;
   text-align: center;
 }

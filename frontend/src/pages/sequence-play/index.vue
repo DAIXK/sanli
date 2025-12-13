@@ -11,18 +11,20 @@
       {{ recordingOverlayEnabled ? '遮罩开' : '遮罩关' }}
     </view> -->
     <view
+      v-if="!snapshotOnlyMode"
       v-show="stage === 'assembly'"
       class="canvas-container"
       :style="containerStyle"
       ref="assemblyMountRef"
     ></view>
     <view
+      v-if="!snapshotOnlyMode"
       v-show="stage === 'viewer'"
       class="canvas-container"
       :style="containerStyle"
       ref="viewerMountRef"
     ></view>
-    <view class="stage-indicator">{{ stageLabel }}</view>
+    <view v-if="!snapshotOnlyMode" class="stage-indicator">{{ stageLabel }}</view>
     <!-- <view class="toast" v-if="loadingText">{{ loadingText }}</view> -->
     <view class="error" v-if="errorText">{{ errorText }}</view>
     
@@ -452,6 +454,12 @@ const stageLabel = computed(() =>
   stage.value === 'assembly' ? '组装展示中...' : '佩戴展示中...'
 )
 const containerStyle = computed(() => {
+  if (snapshotOnlyMode.value) {
+    return {
+      backgroundImage: 'none',
+      backgroundColor: 'transparent'
+    }
+  }
   const bgUrl =
     stage.value === 'assembly'
       ? sequenceConfig.value.assemblyBg || DEFAULT_BG
@@ -465,6 +473,12 @@ const containerStyle = computed(() => {
   }
 })
 const pageStyle = computed(() => {
+  if (snapshotOnlyMode.value) {
+    return {
+      backgroundColor: 'transparent',
+      backgroundImage: 'none'
+    }
+  }
   const bgUrl =
     stage.value === 'assembly'
       ? sequenceConfig.value.assemblyBg || DEFAULT_BG
@@ -934,7 +948,12 @@ const prepareSequenceConfig = () => {
   const viewerBg =
     decodeOrRaw(params.get('viewerBg')) || decodeOrRaw(params.get('bg')) || DEFAULT_BG
 
-  const hasCachedPayload = restoreCachedDiyPayload()
+  const overlayParam = (params.get('overlay') || '').toLowerCase()
+  const autoRecordParam = (params.get('autoRecord') || '').toLowerCase()
+  recordingOverlayEnabled.value =
+    overlayParam === '' || overlayParam === '1' || overlayParam === 'true'
+  autoRecordEnabled.value = autoRecordParam === '' || autoRecordParam === '1' || autoRecordParam === 'true'
+  snapshotOnlyMode.value = !autoRecordEnabled.value
 
   const braceletScale = parseNumber(params.get('scale'), DEFAULT_BRACELET_SCALE)
   const offsetX = parseNumber(params.get('offsetX'), DEFAULT_BRACELET_OFFSET.x)
@@ -945,12 +964,8 @@ const prepareSequenceConfig = () => {
   const camPitch = parseNumber(params.get('camPitch'), DEFAULT_CAM_PITCH)
   const spinSpeed = parseNumber(params.get('spinSpeed'), DEFAULT_SPIN_SPEED)
   const spinTurns = parseNumber(params.get('spinTurns'), DEFAULT_SPIN_TURNS)
-  const overlayParam = (params.get('overlay') || '').toLowerCase()
-  const autoRecordParam = (params.get('autoRecord') || '').toLowerCase()
-  recordingOverlayEnabled.value =
-    overlayParam === '' || overlayParam === '1' || overlayParam === 'true'
-  autoRecordEnabled.value = autoRecordParam === '' || autoRecordParam === '1' || autoRecordParam === 'true'
-  snapshotOnlyMode.value = !autoRecordEnabled.value
+
+  const hasCachedPayload = snapshotOnlyMode.value ? false : restoreCachedDiyPayload()
 
   const assemblySource = assemblyModel || diy || ''
   const viewerSource = viewerModel || diy || ''
@@ -1021,6 +1036,7 @@ const prepareSequenceConfig = () => {
 }
 
 const runAssemblyStage = async () => {
+  if (snapshotOnlyMode.value) return
   if (assemblyInitialized.value) return
   const mountEl = resolveMountElement(assemblyMountRef)
   if (!mountEl) {
@@ -1079,6 +1095,7 @@ const runAssemblyStage = async () => {
 }
 
 const runViewerStage = async () => {
+  if (snapshotOnlyMode.value) return
   if (viewerInitialized.value) return
   const mountEl = resolveMountElement(viewerMountRef)
   if (!mountEl) {
@@ -1175,6 +1192,7 @@ onMounted(() => {
   if (snapshotOnlyMode.value) {
     recordingOverlayVisible.value = recordingOverlayEnabled.value
     const delivered = sendSnapshotToMiniProgram()
+    recordingOverlayVisible.value = false
     if (!delivered) {
       recordingOverlayVisible.value = false
     }
