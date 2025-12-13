@@ -3670,8 +3670,8 @@ const handleAddMarble = async () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4rpx;
-  line-height: 1;
+  gap: 8rpx;
+  line-height: normal;
 }
 
 .undo-icon {

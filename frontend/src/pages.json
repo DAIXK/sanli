@@ -11,7 +11,7 @@
       "path": "pages/sequence-play/index",
       "style": {
         "navigationStyle": "custom",
-        "navigationBarTitleText": "视频生成中..."
+        "navigationBarTitleText": "生成中..."
       }
     }
   ],
