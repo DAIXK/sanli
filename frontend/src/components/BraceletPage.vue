@@ -3351,7 +3351,7 @@ const handleAddMarble = async () => {
 .page {
   height: 100vh;
   box-sizing: border-box;
-  padding: 24rpx;
+  padding: 24rpx 0;
   display: flex;
   flex-direction: column;
   gap: 16rpx;
@@ -3365,6 +3365,7 @@ const handleAddMarble = async () => {
   align-items: flex-start;
   gap: 12rpx;
   flex-shrink: 0;
+  padding: 0 24rpx;
 }
 
 .page-title-bar {
@@ -3403,6 +3404,8 @@ const handleAddMarble = async () => {
   gap: 12rpx;
   padding-bottom: 8rpx;
   flex-shrink: 0;
+  padding-left: 24rpx;
+  padding-right: 24rpx;
 }
 
 .bracelet-tab {
@@ -3471,6 +3474,8 @@ const handleAddMarble = async () => {
   justify-content: space-between;
   gap: 16rpx;
   flex-shrink: 0;
+  padding: 0 24rpx;
+  box-sizing: border-box;
 }
 .selector-left {
   display: flex;
@@ -3551,8 +3556,8 @@ const handleAddMarble = async () => {
 .viewer-card {
   position: relative;
   background: #ffffff;
-  border-radius: 24rpx;
-  padding: 16rpx;
+  border-radius: 0;
+  padding: 0;
   box-shadow: none;
   display: flex;
   flex-direction: column;
@@ -3568,7 +3573,7 @@ const handleAddMarble = async () => {
   width: 100%;
   height: 100%;
   flex: 1;
-  border-radius: 20rpx;
+  border-radius: 0;
   background: #ffffff;
   min-height: 0;
 }
@@ -3711,6 +3716,7 @@ const handleAddMarble = async () => {
   flex-direction: column;
   gap: 12rpx;
   flex-shrink: 0;
+  margin: 0 24rpx;
 }
 
 .carousel-header {
