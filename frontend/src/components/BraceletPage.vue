@@ -28,13 +28,11 @@
       >
         {{ videoGenerating ? '生成中…' : '生成视频' }}
       </button> -->
-      <button
-        class="ghost-button"
-        :class="{ 'is-disabled': !canGenerateVideo || videoGenerating }"
-        :disabled="!canGenerateVideo || videoGenerating"
-        @tap="handleGenerateImage"
-      >
-        {{ videoGenerating ? '生成中…' : '生成图片' }}
+      <button class="user-button" type="button" @tap="handleOpenUser">
+        <view class="undo-button-content">
+          <text class="undo-icon">👤</text>
+          <text class="undo-label">我的</text>
+        </view>
       </button>
       <!-- <button
         class="ghost-button ghost-button--secondary"
@@ -64,11 +62,13 @@
           </view>
         </view>
       </view>
-      <button class="user-button selector-user-button" type="button" @tap="handleOpenUser">
-        <view class="undo-button-content">
-          <text class="undo-icon">👤</text>
-          <text class="undo-label">我的</text>
-        </view>
+      <button
+        class="ghost-button generate-btn"
+        :class="{ 'is-disabled': !canGenerateVideo || videoGenerating }"
+        :disabled="!canGenerateVideo || videoGenerating"
+        @tap="handleGenerateImage"
+      >
+        {{ videoGenerating ? '生成中…' : '生成图片' }}
       </button>
     </view>
 
@@ -3435,12 +3435,24 @@ const handleAddMarble = async () => {
   background: #fff;
   border-radius: 20rpx;
   border: 2rpx solid rgba(0, 0, 0, 0.12);
-  // padding: 12rpx 32rpx;
+  padding: 12rpx 24rpx;
   font-size: 26rpx;
   color: #111827;
   box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.05);
-  position: relative;
   overflow: hidden;
+  min-height: 64rpx;
+}
+
+.generate-btn {
+  margin: 0;
+  margin-left: auto;
+  min-height: 0;
+  height: auto;
+  padding: 10rpx 20rpx;
+  font-size: 24rpx;
+  align-self: center;
+  border-radius: 12rpx;
+  line-height: 1.2;
 }
 
 .ghost-button--secondary {
